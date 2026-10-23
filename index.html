@@ -41,7 +41,15 @@ td{padding:7px 6px;border-bottom:1px solid #ddd;vertical-align:middle;font-size:
 tr{break-inside:avoid}
 td.no{width:34px;color:#555;text-align:right}td.q{width:46%}td.a{border-bottom:1px solid #777}
 td.q b{font-size:16px}
-.al{font-size:11px;color:#777}em{font-style:normal;font-size:11px;color:#666;border:1px solid #bbb;border-radius:4px;padding:0 4px;margin-left:6px}
+.al{font-size:11px;color:#777}
+body.solving .ui,body.solving #out{display:none!important}
+.sv{max-width:560px;margin:0 auto}
+.qbig{font-size:34px;font-weight:700;text-align:center;margin:18px 0 8px;word-break:break-word}
+.prog{height:8px;background:var(--line);border-radius:99px;overflow:hidden}.prog i{display:block;height:100%;background:var(--acc)}
+.mcs{display:grid;gap:10px;margin-top:12px}.mc{text-align:left;padding:12px 14px;font-size:17px}
+.good{color:var(--acc);font-weight:700;font-size:18px}.badc{color:var(--warn);font-weight:700;font-size:18px}
+.rt{width:100%;font-size:14px;margin-top:12px}.rt td,.rt th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left}.rt th{color:var(--mute);font-weight:400}
+#ans{flex:1;min-width:160px;font-size:18px}em{font-style:normal;font-size:11px;color:#666;border:1px solid #bbb;border-radius:4px;padding:0 4px;margin-left:6px}
 .ch{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px;font-size:14px}
 tr.w td{height:38px}
 @media print{
@@ -56,6 +64,7 @@ tr.w td{height:38px}
 </head>
 <body>
 <div class="wrap">
+<div id="solve" hidden></div>
 <div class="ui">
 <h1>영어 단어 시험지 만들기</h1>
 <p class="lead">단어를 붙여넣고 유형과 문제 수를 고르면 인쇄용 시험지와 답안지가 만들어져요. 입력한 단어는 이 브라우저 밖으로 나가지 않습니다.</p>
@@ -110,6 +119,11 @@ tr.w td{height:38px}
 <span class="lab">재시험지 만들기</span>
 <div class="row" style="margin-top:0"><input type="text" id="wrong" placeholder="틀린 문제 번호 입력 (예: 2, 5, 9)" style="flex:1;min-width:200px"><button class="btn" id="retest" type="button">재시험지 만들기</button></div>
 </div>
+<div class="card ui"><h2>온라인으로 시험 보기</h2>
+<div class="row" style="margin-top:0"><label><input type="checkbox" id="optFb"> 문제마다 정답 바로 보여주기</label><label><input type="checkbox" id="optLen" checked> 같은 단어의 다른 뜻도 정답 인정</label></div>
+<div class="row"><button class="cta" id="solveBtn" type="button">온라인으로 풀어보기</button><button class="btn" id="linkBtn" type="button">학생용 링크 만들기</button></div>
+<div class="mute" style="margin-top:8px">정답은 키보드로 입력하거나 마이크(음성 인식)로 말할 수 있어요. 객관식은 보기를 누르면 됩니다. 학생용 링크는 이 시험지를 그대로 열어주며, 링크에 정답이 포함돼 있어서 연습용·학원 내부용으로 쓰세요.</div>
+<div class="mute" id="lmsg" style="margin-top:8px"></div></div>
 <div id="testPaper" class="paper"></div>
 <div id="keyPaper" class="paper"></div>
 </div>
@@ -187,6 +201,71 @@ function retest(){if(!exam)return;var n=exam.items.length;var nums=($("wrong").v
  var type=exam.type;if(type==="mc"&&words.length<4){type="ek"}
  exam={type:type,items:shuf(ws).map(function(w){return mk(w,type)})};
  $("msg").textContent=ws.length+"문제로 재시험지를 만들었어요.";$("wrong").value="";render();show("test")}
+/*ONLINE-START*/
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition,S=null;
+function nk(s){return String(s).toLowerCase().replace(/[\s~\-–—.,;:!?'"’“”()\[\]\/·]/g,"")}
+function koCands(it,len){var c=[];(len?it.all:[it.ko]).forEach(function(m){c.push(nk(m));c.push(nk(m.replace(/\([^)]*\)/g,"")))});return c.filter(Boolean)}
+function check(it,g){if(it.dir==="mc")return g===it.a;g=nk(g);if(!g)return false;return it.dir==="ke"?g===nk(it.en):koCands(it,S.cfg.len).indexOf(g)>=0}
+function ansText(it){return it.dir==="mc"?it.opts[it.a]:it.dir==="ke"?it.en:(S.cfg.len&&it.n>1?it.all.join(", "):it.ko)}
+function qText(it){return it.dir==="ke"?it.ko:it.en}
+function givenText(it,a){return it.dir==="mc"?(a.g>=0?it.opts[a.g]:""):a.g}
+function startSolve(cfg,back){S={cfg:cfg,i:0,a:[],back:back};document.body.classList.add("solving");$("solve").hidden=false;window.scrollTo(0,0);ask()}
+function leave(){document.body.classList.remove("solving");$("solve").hidden=true;S=null}
+function ask(){var it=S.cfg.items[S.i],n=S.cfg.items.length;
+ var h='<div class="card sv"><div class="row" style="margin-top:0"><span class="mute">'+esc(S.cfg.title)+'</span><span style="flex:1"></span><span class="mute">'+(S.i+1)+' / '+n+'</span></div><div class="prog"><i style="width:'+(S.i/n*100)+'%"></i></div>';
+ h+='<div class="qbig">'+esc(qText(it))+(it.dir==="ke"?"":mt(it))+'</div>';
+ if(it.dir==="mc"){h+='<div class="mute" style="text-align:center">알맞은 뜻을 고르세요</div><div class="mcs">'+it.opts.map(function(o,j){return'<button class="btn mc" type="button" data-j="'+j+'">'+(j+1)+'. '+esc(o)+'</button>'}).join("")+'</div>'}
+ else{h+='<div class="mute" style="text-align:center">'+(it.dir==="ke"?"영어 단어를 쓰거나 말해 보세요":"우리말 뜻을 쓰거나 말해 보세요")+'</div><div class="row"><input id="ans" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="정답">'+(SR?'<button class="btn" id="mic" type="button">🎤 말하기</button>':'')+'</div><div class="row"><button class="cta" id="ok" type="button">확인</button><button class="btn" id="dk" type="button">모르겠어요</button></div>'}
+ h+='<div id="svmsg" class="mute" role="status" style="margin-top:10px"></div></div>';
+ $("solve").innerHTML=h;
+ if(it.dir==="mc"){Array.prototype.forEach.call($("solve").querySelectorAll(".mc"),function(b){b.onclick=function(){submit(+b.getAttribute("data-j"))}})}
+ else{var a=$("ans");$("ok").onclick=function(){submit(a.value)};$("dk").onclick=function(){submit("")};
+  a.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.isComposing){e.preventDefault();$("ok").click()}});
+  if($("mic"))$("mic").onclick=listen;a.focus()}}
+function submit(g){var it=S.cfg.items[S.i],ok=check(it,g);S.a.push({g:g,ok:ok});
+ if(!S.cfg.fb){next();return}
+ Array.prototype.forEach.call($("solve").querySelectorAll("button,input"),function(x){x.disabled=true});
+ $("svmsg").innerHTML='<div class="'+(ok?"good":"badc")+'">'+(ok?"정답이에요! ⭕":"아쉬워요 ❌")+'</div>'+(ok?"":'<div>정답: <b>'+esc(ansText(it))+'</b></div>')+'<div class="row"><button class="cta" id="nx" type="button">다음</button></div>';
+ $("nx").onclick=next;$("nx").focus()}
+function next(){S.i++;if(S.i>=S.cfg.items.length)result();else ask()}
+function result(){var its=S.cfg.items,n=its.length,r=S.a.filter(function(x){return x.ok}).length,c=S.cfg,back=S.back,A=S.a;
+ var h='<div class="card sv"><h2 style="text-align:center">'+esc(c.title)+'</h2><div class="qbig">'+r+' / '+n+'</div><div class="mute" style="text-align:center">정답률 '+Math.round(r/n*100)+'%</div><table class="rt"><tr><th></th><th>문제</th><th>내 답</th><th>정답</th></tr>';
+ its.forEach(function(it,i){var a=A[i];h+='<tr><td>'+(a.ok?"⭕":"❌")+'</td><td>'+(i+1)+'. '+esc(qText(it))+'</td><td>'+esc(givenText(it,a)||"(답 없음)")+'</td><td>'+(a.ok?"":esc(ansText(it)))+'</td></tr>'});
+ h+='</table><div class="row">'+(r<n?'<button class="cta" id="rw" type="button">틀린 문제만 다시</button>':'')+'<button class="btn" id="ra" type="button">처음부터 다시</button><button class="btn" id="cp" type="button">결과 복사</button>'+(back?'<button class="btn" id="bk" type="button">시험지로 돌아가기</button>':'')+'</div><div id="svmsg" class="mute" role="status" style="margin-top:10px"></div></div>';
+ $("solve").innerHTML=h;window.scrollTo(0,0);
+ if($("rw"))$("rw").onclick=function(){startSolve({items:shuf(its.filter(function(_,i){return !A[i].ok})),title:c.title.indexOf("(재시험)")<0?c.title+" (재시험)":c.title,fb:c.fb,len:c.len},back)};
+ $("ra").onclick=function(){startSolve({items:shuf(its),title:c.title,fb:c.fb,len:c.len},back)};
+ if($("bk"))$("bk").onclick=leave;
+ $("cp").onclick=function(){var t=c.title+" "+r+"/"+n+"\n"+its.map(function(it,i){return A[i].ok?"":(i+1)+". "+qText(it)+" → "+ansText(it)+" (내 답: "+(givenText(it,A[i])||"-")+")"}).filter(Boolean).join("\n"),m=$("svmsg");
+  function fb(){m.innerHTML='<textarea readonly rows="5" style="width:100%">'+esc(t)+'</textarea>'}
+  try{navigator.clipboard.writeText(t).then(function(){m.textContent="결과를 복사했어요. 선생님께 붙여넣어 보내 주세요."},fb)}catch(e){fb()}}}
+function listen(){var it=S.cfg.items[S.i],b=$("mic");if(!SR)return;var r=new SR();r.lang=it.dir==="ke"?"en-US":"ko-KR";r.maxAlternatives=5;r.interimResults=false;
+ b.textContent="🎙️ 듣는 중...";b.disabled=true;
+ r.onresult=function(e){var al=[];for(var j=0;j<e.results[0].length;j++)al.push(e.results[0][j].transcript);var hit=al.filter(function(x){return check(it,x)})[0],a=$("ans");if(a){a.value=hit||al[0]||"";$("svmsg").textContent="들은 내용: "+a.value+" — 맞으면 확인을 눌러요."}};
+ r.onerror=function(e){var m=$("svmsg");if(m)m.textContent=(e.error==="not-allowed"||e.error==="service-not-allowed")?"마이크 사용을 허용해 주세요. (주소창 옆 마이크 아이콘)":"음성을 알아듣지 못했어요. 다시 눌러 주세요."};
+ r.onend=function(){var x=$("mic");if(x){x.textContent="🎤 말하기";x.disabled=false}};
+ try{r.start()}catch(e){b.disabled=false;b.textContent="🎤 말하기"}}
+/*PACK-START*/
+function b64(u){var s="";u.forEach(function(x){s+=String.fromCharCode(x)});return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function ub64(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";var r=atob(s),u=new Uint8Array(r.length);for(var i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u}
+async function pack(o){var b=new TextEncoder().encode(JSON.stringify(o)),m="0";
+ if(window.CompressionStream){b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());m="1"}
+ return m+b64(b)}
+async function unpack(s){var m=s.charAt(0),b=ub64(s.slice(1));
+ if(m==="1")b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+ return JSON.parse(new TextDecoder().decode(b))}
+/*PACK-END*/
+function cfgNow(){return{items:exam.items,title:$("title").value||"영어 단어 시험",fb:$("optFb").checked,len:$("optLen").checked}}
+$("solveBtn").onclick=function(){if(exam)startSolve(cfgNow(),true)};
+$("linkBtn").onclick=async function(){if(!exam)return;var c=cfgNow(),m=$("lmsg");
+ try{var p=await pack({t:c.title,f:c.fb?1:0,l:c.len?1:0,i:c.items.map(function(it){return{e:it.en,k:it.ko,l:it.all,x:it.idx,n:it.n,d:it.dir,o:it.opts,a:it.a}})});
+  var link=location.href.split("#")[0]+"#"+p;
+  m.innerHTML='<span id="lt">학생에게 보낼 링크예요. (길이 '+link.length+'자)</span><input type="text" readonly id="lk" style="margin-top:6px">';$("lk").value=link;$("lk").select();
+  try{await navigator.clipboard.writeText(link);$("lt").textContent="링크를 복사했어요. 학생에게 보내 주세요. (길이 "+link.length+"자)"}catch(e){}
+ }catch(e){m.textContent="링크를 만들지 못했어요. 브라우저를 최신 버전으로 업데이트해 보세요."}};
+function initStudent(){var h=location.hash.slice(1);if(!/^[01][A-Za-z0-9_-]{20,}$/.test(h))return;
+ unpack(h).then(function(o){var items=o.i.map(function(c){return{en:c.e,ko:c.k,all:c.l,idx:c.x,n:c.n,dir:c.d,opts:c.o,a:c.a}});startSolve({items:items,title:o.t,fb:!!o.f,len:!!o.l},false)}).catch(function(){})}
+/*ONLINE-END*/
 $("words").addEventListener("input",parse);
 $("make").onclick=make;$("retest").onclick=retest;
 $("tTest").onclick=function(){show("test")};$("tKey").onclick=function(){show("key")};
@@ -269,6 +348,7 @@ $("ns").addEventListener("click",function(e){var n=e.target.getAttribute&&e.targ
 function sync(){var v=$("num").value;document.querySelectorAll("#ns .pill").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-n")===String(v))})}
 $("num").addEventListener("input",sync);
 try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=localStorage.getItem("wt-title");if(tt)$("title").value=tt;var aa=localStorage.getItem("wt-ac");if(aa)$("academy").value=aa}catch(e){}
+initStudent();
 parse();
 </script>
 </body>
