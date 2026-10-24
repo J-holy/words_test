@@ -90,7 +90,7 @@ tr.w td{height:38px}
 <div class="row"><span id="cnt" class="mute">인식된 단어 0개</span><span style="flex:1"></span><button class="btn" id="sample" type="button">예시 불러오기</button><button class="btn" id="clear" type="button">비우기</button></div>
 <div class="mute" style="margin-top:6px">구분은 -, :, =, 탭, 띄어쓰기 중 무엇이든 괜찮아요. 엑셀에서 두 열을 복사해 붙여넣어도 됩니다.</div>
 <div class="row"><button class="btn" id="pick" type="button">📂 파일에서 불러오기</button><input id="file" type="file" accept=".xlsx,.xls,.csv,.txt,.pdf,.png,.jpg,.jpeg,.webp,.heic,.heif" multiple style="display:none"><span class="mute">엑셀·CSV·TXT·PDF·사진(글자 인식) 지원 (입력창에 끌어다 놓아도 돼요)</span></div>
-<div class="row" style="margin-top:6px"><label style="display:flex;gap:6px;align-items:flex-start"><input type="checkbox" id="colUse" style="margin-top:3px"><span><b>단어·뜻 칸을 직접 지정해서 읽기</b> <span class="mute">(예문이 섞이거나 잘못 읽힐 때 추천 · 사진·스캔 쪽을 올리면 칸을 그리는 화면이 나와요. 같은 책이면 지난번 칸이 미리 그려져 있어 확인만 하면 돼요)</span></span></label></div>
+<div class="row" style="margin-top:6px"><label style="display:flex;gap:6px;align-items:flex-start"><input type="checkbox" id="colUse" style="margin-top:3px"><span><b>단어·뜻 칸을 직접 지정해서 읽기</b> <span class="mute">(먼저 끄고 자동으로 읽어 보세요. 자동으로 틀릴 때만 켜세요 · 사진·스캔 쪽을 올리면 칸을 그리는 화면이 나와요. 같은 책이면 지난번 칸이 미리 그려져 있어 확인만 하면 돼요)</span></span></label></div>
 <details id="srvBox" style="margin-top:6px"><summary><b>내 서버(라즈베리파이)로 글자 읽기</b> <span class="mute" id="srvSt"></span></summary>
 <div class="row"><label><input type="checkbox" id="srvUse"> 내 서버로 읽기 (끄면 이 브라우저에서 읽어요)</label></div>
 <div class="row"><span class="mute">서버 주소</span><input type="text" id="srvUrl" placeholder="https://pi.xxxx.ts.net" style="flex:1;min-width:200px" autocomplete="off"></div>
@@ -680,12 +680,12 @@ function dkFit(P){var n=P.length,sx=0,sy=0,sxy=0,syy=0;P.forEach(function(p){sx+
 function parseDict(W,opt){opt=opt||{};var C=opt.cols||null;
  W=W.filter(function(w){return w.t&&String(w.t).trim()&&(w.c==null||w.c>=25)});if(W.length<30)return null;
  var T=W.map(function(w){var r=String(w.t).trim();return{raw:r,ko:vHan(r),x0:w.x0,x1:w.x1,y0:w.y0,y1:w.y1,cx:(w.x0+w.x1)/2,cy:(w.y0+w.y1)/2,h:w.y1-w.y0,c:w.c==null?100:w.c,ln:w.ln}});
- if(C){var sp=Math.max(1,C.m1-C.w0);T=T.filter(function(o){return o.cx>=C.w0-0.03*sp&&o.cx<=C.m1+0.03*sp})}
+ if(C){var sp=Math.max(1,C.m1-C.w0);T=T.filter(function(o){return o.cx>=C.w0-0.14*sp&&o.cx<=C.m1+0.03*sp})}
  if(T.length<25)return null;
  var minX=Math.min.apply(0,T.map(function(o){return o.x0})),maxX=Math.max.apply(0,T.map(function(o){return o.x1})),pw=Math.max(1,maxX-minX),Hm=tbMedian(T.map(function(o){return o.h}))||20;
  /* 1. 번호 열 */
  var nc=T.filter(function(o){return/^[1-9]\d{3}$/.test(o.raw)&&o.c>=30&&o.x0<minX+0.45*pw});
- if(C)nc=nc.filter(function(o){return o.x0<C.w1+0.02*pw&&o.cx>C.w0-0.05*pw});
+ if(C)nc=nc.filter(function(o){return o.x0<C.w1+0.02*pw});
  if(nc.length<3)return null;
  nc.sort(function(a,b){return a.cx-b.cx});var grp=[],cur=[nc[0]];
  for(var i=1;i<nc.length;i++){if(nc[i].cx-nc[i-1].cx>0.045*pw){grp.push(cur);cur=[]}cur.push(nc[i])}grp.push(cur);
@@ -700,10 +700,9 @@ function parseDict(W,opt){opt=opt||{};var C=opt.cols||null;
  var NN=N.map(function(n){return T.filter(function(o){return o===n})[0]});
  /* 2. 뜻 칸 시작 */
  var nx=tbMedian(NN.map(function(n){return n.px0})),m0;
- if(C)m0=C.m0-b*(tbMedian(NN.map(function(n){return n.cy})));
- else{var ks=T.filter(function(o){return o.ko&&o.c>=40&&o.px0>nx+0.14*pw&&o.px0<nx+0.6*pw}).map(function(o){return o.px0}).sort(function(p,q){return p-q});m0=null;
-  for(i=0;i+2<ks.length;i++){if(ks[i+2]-ks[i]<0.03*pw){m0=ks[i];break}}
-  if(m0==null)return null}
+ var ks=T.filter(function(o){return o.ko&&o.c>=40&&o.px0>nx+0.14*pw&&o.px0<nx+0.6*pw}).map(function(o){return o.px0}).sort(function(p,q){return p-q});m0=null;
+ for(i=0;i+2<ks.length;i++){if(ks[i+2]-ks[i]<0.03*pw){m0=ks[i];break}}
+ if(m0==null){if(C)m0=C.m0-b*(tbMedian(NN.map(function(n){return n.cy})));else return null}
  var bandL=m0-0.025*pw,bandR=C?C.m1-b*(tbMedian(NN.map(function(n){return n.cy}))):maxX+10;
  /* 3. 표제어 */
  var heads=[],miss=[],LAT=function(o){return!o.ko&&/[A-Za-z]/.test(o.raw)};
@@ -894,7 +893,7 @@ $("cmOk").onclick=function(){if(!CE||!CE.w||!CE.m)return;var a=CE.w,b=CE.m;if(a.
  COLS={w:[a.x0,a.x1],m:[b.x0,b.x1],y:[y0,y1]};colsSave();cmClose(COLS)};
 function colsPx(F,cv){return{w0:F.w[0]*cv.width,w1:F.w[1]*cv.width,m0:F.m[0]*cv.width,m1:F.m[1]*cv.width}}
 async function ocrCols(cv,F){var w=await getOcr(),px=colsPx(F,cv),W=cv.width,H=cv.height,
- x0=Math.min(px.w0,px.m0)-0.02*W,x1=Math.max(px.w1,px.m1)+0.02*W,y0=F.y[0]*H,y1=F.y[1]*H,sc=Math.max(1,Math.min(2,1500/Math.max(1,x1-x0))),best=null;
+ x0=Math.min(px.w0,px.m0)-0.18*W,x1=Math.max(px.w1,px.m1)+0.02*W,y0=F.y[0]*H,y1=F.y[1]*H,sc=Math.max(1,Math.min(2,1500/Math.max(1,x1-x0))),best=null;
  var c=cropCanvas(cv,x0,y0,x1,y1,sc);if(!c)throw new Error("img");
  var ps=SRV.on()?[3]:[11,6,3];
  for(var i=0;i<ps.length;i++){if(best&&best.sc>=18)break;
