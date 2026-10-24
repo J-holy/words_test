@@ -57,6 +57,10 @@ body.solving .ui,body.solving #out{display:none!important}
 .th canvas{width:100%;display:block;border-radius:4px;background:#eee}
 .th.on{border-color:var(--acc);color:var(--acc);font-weight:700}
 #pv{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.82);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow:auto;cursor:zoom-out}#pv[hidden]{display:none}#pv img{max-width:100%;background:#fff}
+.cmw{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.78);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:10px;overflow:auto}.cmw[hidden]{display:none}
+.cmb{background:var(--bg,#fff);color:inherit;border-radius:12px;padding:12px;max-width:940px;width:100%}
+#cmc{display:block;margin:8px auto;max-width:100%;touch-action:none;cursor:crosshair;border:1px solid var(--line);border-radius:6px}
+.cmb button.on{outline:2px solid var(--acc)}
 .rvsel{padding:6px 8px;font-size:14px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit;max-width:100%}
 .pgl{background:none;border:0;color:var(--acc);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
 .ch{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:4px;font-size:14px}
@@ -75,6 +79,7 @@ tr.w td{height:38px}
 <div class="wrap">
 <div id="solve" hidden></div>
 <div id="pv" hidden><img id="pvi" alt="원본 쪽"></div>
+<div id="cm" class="cmw" hidden><div class="cmb"><b>읽을 칸 지정</b><div class="mute" id="cmH" style="margin:4px 0"></div><div class="row"><button class="btn" id="cmB0" type="button">① 단어 칸 그리기</button><button class="btn" id="cmB1" type="button">② 뜻 칸 그리기</button><button class="btn" id="cmClr" type="button">모두 지우기</button></div><canvas id="cmc" width="300" height="300"></canvas><div class="row"><button class="cta" id="cmOk" type="button" disabled>이 칸으로 읽기</button><button class="btn" id="cmSkip" type="button">건너뛰고 자동으로 읽기</button></div></div></div>
 <div class="ui">
 <h1>영어 단어 시험지 만들기</h1>
 <p class="lead">단어를 붙여넣고 유형과 문제 수를 고르면 인쇄용 시험지와 답안지가 만들어져요. 입력한 단어는 이 브라우저 밖으로 나가지 않습니다.</p>
@@ -85,6 +90,7 @@ tr.w td{height:38px}
 <div class="row"><span id="cnt" class="mute">인식된 단어 0개</span><span style="flex:1"></span><button class="btn" id="sample" type="button">예시 불러오기</button><button class="btn" id="clear" type="button">비우기</button></div>
 <div class="mute" style="margin-top:6px">구분은 -, :, =, 탭, 띄어쓰기 중 무엇이든 괜찮아요. 엑셀에서 두 열을 복사해 붙여넣어도 됩니다.</div>
 <div class="row"><button class="btn" id="pick" type="button">📂 파일에서 불러오기</button><input id="file" type="file" accept=".xlsx,.xls,.csv,.txt,.pdf,.png,.jpg,.jpeg,.webp,.heic,.heif" multiple style="display:none"><span class="mute">엑셀·CSV·TXT·PDF·사진(글자 인식) 지원 (입력창에 끌어다 놓아도 돼요)</span></div>
+<div class="row" style="margin-top:6px"><label style="display:flex;gap:6px;align-items:flex-start"><input type="checkbox" id="colUse" style="margin-top:3px"><span><b>단어·뜻 칸을 직접 지정해서 읽기</b> <span class="mute">(예문이 섞이거나 잘못 읽힐 때 추천 · 사진·스캔 쪽을 올리면 칸을 그리는 화면이 나와요. 같은 책이면 지난번 칸이 미리 그려져 있어 확인만 하면 돼요)</span></span></label></div>
 <div id="imsg" class="mute" role="status" style="min-height:20px"></div>
 <div id="pk" class="card" hidden style="margin-top:10px">
 <h2>읽을 쪽 고르기</h2>
@@ -548,7 +554,8 @@ function cdSane(fin){fin.forEach(function(e){if(e.ko){e.ko=e.ko.replace(/^(명�
  if(ws.length>=3&&CD_FSTART[ws[0].toLowerCase()]&&!/^the$/i.test(ws[0]))return false;
  return true})}
 function scoreFin(fin){var n=fin.filter(function(e){return!e.sub}).length,cl=fin.filter(function(e){return!e.sub&&e.ko&&!e.warn.length}).length;return cl*3+fin.filter(function(e){return!e.sub&&e.ko}).length-(n-cl)}
-function parseBest(w,meanOv,strip,force){var c=[];
+function parseBest(w,meanOv,strip,force,cols){var c=[];
+ if(cols){try{var tc=parseTable(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols});if(tc){var fc=cdSane(vaFinish(tc,strip));return{m:"T",r:tc,fin:fc,sc:scoreFin(fc)}}}catch(e){}return null}
  function cp(){return w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}})}
  if(!force||force==="V")try{var v=parseVoca(cp(),{meanX:meanOv});if(v)c.push({m:"V",r:v})}catch(e){}
  if(!force||force==="C")try{var k=parseCards(cp());if(k)c.push({m:"C",r:k})}catch(e){}
@@ -565,10 +572,12 @@ function parseTable(W,opt){opt=opt||{};
  var H=vmed(W.map(function(w){return w.y1-w.y0}))||20;
  var T=W.map(function(w){var ko=vHan(w.t);return{t:cdClean(String(w.t).trim(),ko),raw:w.t,ko:ko,x0:w.x0,x1:w.x1,y0:w.y0,y1:w.y1,cy:(w.y0+w.y1)/2,h:w.y1-w.y0,c:w.c==null?100:w.c,ln:w.ln}}).filter(function(o){return o.t});
  /* 1. left column x from the row numbers (3-4 digits) */
- var nums=T.filter(function(o){return/^\d{3,4}$/.test(o.t)&&o.c>=35&&o.x0<minX+0.3*pw}),hx;
+ var C=opt.cols||null,nums=T.filter(function(o){return/^\d{3,4}$/.test(o.t)&&o.c>=35&&(C?o.x1<C.w0+0.02*pw&&o.x0>C.w0-0.15*pw:o.x0<minX+0.3*pw)}),hx,tolX,bandL,bandR,mx;
+ if(C){hx=C.w0;tolX=Math.max(1,(C.w1-C.w0)/1.6);bandL=C.w1+0.3*Math.max(0,C.m0-C.w1);bandR=C.m1;mx=C.m0}
+ else{
  if(nums.length<3)return null;
  hx=tbMedian(nums.map(function(o){return o.x0}));
- var tolX=0.035*pw;
+ tolX=0.035*pw;
  /* 2. middle-column band from the starts of Korean lines */
  var kt=T.filter(function(o){return o.ko&&o.c>=40&&o.x0>hx+0.12*pw}),by={};
  kt.forEach(function(o){var k=o.ln==null?"y"+Math.round(o.cy/(H*1.2)):o.ln;(by[k]=by[k]||[]).push(o.x0)});
@@ -580,14 +589,15 @@ function parseTable(W,opt){opt=opt||{};
  if(cl.length<2)return null;
  var midC=cl[0],exC=cl[1];
  if(exC.length<0.5*midC.length||midC.length<4)return null;
- var mx=tbMedian(midC),midMin=Math.min.apply(0,midC),exStart=Math.min.apply(0,exC);
- var bandL=midMin-0.07*pw,bandR=exStart-0.02*pw;
+ mx=tbMedian(midC);var midMin=Math.min.apply(0,midC),exStart=Math.min.apply(0,exC);
+ bandL=midMin-0.07*pw;bandR=exStart-0.02*pw;
+ }
  /* 3. left-column latin tokens: derived words (POS/Korean on the same row), pronunciations (skipped) and headwords */
- var left=T.filter(function(o){return!o.ko&&Math.abs(o.x0-hx)<=tolX*1.6&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3}),heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
+ var left=T.filter(function(o){return!o.ko&&(C?(o.x0>=C.w0-0.02*pw&&o.x0<=C.w1):Math.abs(o.x0-hx)<=tolX*1.6)&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3}),heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
  left.forEach(function(o){
   if(/^[\[\{\(]|[\]\}\)]$|[^\x00-\x7F]/.test(String(o.raw).trim()))return;
   if(T.some(function(m){return m!==o&&/^[\[\{\(]$/.test(String(m.raw).trim())&&Math.abs(m.cy-o.cy)<0.6*o.h&&o.x0-m.x1<0.03*pw&&o.x0-m.x1>-5}))return;
-  var rowm=T.filter(function(m){return m!==o&&Math.abs(m.cy-o.cy)<0.6*Math.max(o.h,m.h)&&m.x0>o.x1&&m.x0<bandL&&m.c>=40&&(m.ko||POS.test(String(m.raw).trim()))}),
+  var rowm=T.filter(function(m){return m!==o&&Math.abs(m.cy-o.cy)<0.6*Math.max(o.h,m.h)&&m.x0>o.x1&&(C?(m.x0+m.x1)/2<bandL:m.x0<bandL)&&m.c>=40&&(m.ko||POS.test(String(m.raw).trim()))}),
    mates=rowm.filter(function(m){return m.ko});
   if(rowm.length){subs.push({en:o.t,raw:mates.sort(function(a,b){return a.x0-b.x0}).map(function(m){return m.t}).join(" "),conf:o.c,hc:o.c,sub:true,y:o.cy,x:o.x0,h:o.h});return}
   var low=o.t.toLowerCase();if(CD_STOP[low])return;
@@ -597,16 +607,16 @@ function parseTable(W,opt){opt=opt||{};
  heads=heads.filter(function(o,i){if(o.h>=0.75*mH)return true;
   return!heads.some(function(g){return g!==o&&g.h>=0.75*mH&&o.cy>g.cy&&o.cy-g.cy<2.2*g.h})});
  subs=subs.filter(function(sb){return!heads.some(function(g){return false})});
- if(heads.length<4)return null;
+ if(heads.length<(C?2:4))return null;
 
  var pitch=tbMedian(heads.slice(1).map(function(h,i){return h.cy-heads[i].cy}).filter(function(d){return d>0.5*H}))||4*H;
  /* drop heads that sit closer than 0.45 pitch to the previous one (noise) */
  heads=heads.filter(function(h,i){return i===0||h.cy-heads[i-1].cy>0.45*pitch||h.h>heads[i-1].h});
  /* 4. Korean segments in the middle band */
- var mid=W.filter(function(w){return w.x0>=bandL&&w.x0<bandR});
+ var mid=W.filter(function(w){var xc=C?(w.x0+w.x1)/2:w.x0;return xc>=bandL&&xc<bandR});
  var segs=cdSegs(mid,H).filter(function(s){return s.k==="k"&&s.c>=40&&!/^[은는을를]/.test(s.t)});
  var dys=[];heads.forEach(function(h){var b=null,bd=1e9;segs.forEach(function(s){var d=s.cy-h.cy;if(Math.abs(d)<bd){bd=Math.abs(d);b=d}});if(b!=null&&bd<0.5*pitch)dys.push(b)});
- if(dys.length<Math.max(3,0.5*heads.length))return null;
+ if(dys.length<Math.max(C?2:3,0.5*heads.length))return null;
  var off=tbMedian(dys);
  var own=heads.map(function(h){return{h:h,segs:[]}});
  segs.forEach(function(s){var oi=-1;own.forEach(function(o,i){if(o.h.cy+off<=s.cy+0.45*pitch)oi=i});
@@ -618,13 +628,14 @@ function parseTable(W,opt){opt=opt||{};
  var pool=T.filter(function(o){return!o.ko&&o.x0>=bandL&&/^[A-Za-z][A-Za-z'’\-]{2,}$/.test(o.t)}).map(function(o){return o.t.toLowerCase()}),
  okH=function(e){var l=e.en.toLowerCase(),pre=l.length<=4?l:l.slice(0,-1);return pool.some(function(t){return t.indexOf(pre)===0})},
  nOk=entries.filter(okH).length;
- if(entries.length>=5&&nOk>=0.6*entries.length)entries.forEach(function(e){if(!okH(e))e.hc=Math.min(e.hc,50)});
+ if(!C&&entries.length>=5&&nOk>=0.6*entries.length)entries.forEach(function(e){if(!okH(e))e.hc=Math.min(e.hc,50)});
  subs.forEach(function(s){entries.push(s)});
  entries.sort(function(a,b){return a.y-b.y});
  var nr=nums.slice().sort(function(a,b){return a.cy-b.cy}),npc=tbMedian(nr.slice(1).map(function(n,i){return n.cy-nr[i].cy}).filter(function(d){return d>2*H}))||pitch,miss=[];
  var anc=nr.map(function(n){return{y:n.cy,v:parseInt(n.t,10)}});
  if(nr.length>=3&&anc[0].v%10!==1){for(var k=1;k<=Math.min(3,anc[0].v%10-1);k++){var fy=anc[0].y-k*npc;if(fy>0)anc.unshift({y:fy,v:anc[0].v-1,fake:1})}}
  var la=nr[nr.length-1];if(nr.length>=3&&la&&la.t&&parseInt(la.t,10)%10!==0){var fy2=la.cy+npc;if(fy2<Math.max.apply(0,W.map(function(w){return w.y1}))+0.2*npc)anc.push({y:fy2,v:0,fake:1})}
+ if(C&&nr.length<3){anc=[];var hg=heads.slice(1).map(function(h,i){return h.cy-heads[i].cy}),mg=tbMedian(hg);if(mg>0)heads.slice(1).forEach(function(h,i){var g=h.cy-heads[i].cy;if(g>1.8*mg){for(var q=1;q<Math.round(g/mg);q++)anc.push({y:heads[i].cy+q*mg-0.4*mg,v:0,fake:1})}});npc=mg||npc;own.forEach(function(o){var ss=o.segs.slice().sort(function(a,b){return a.cy-b.cy});for(var q=1;q<ss.length;q++)if(mg>0&&ss[q].cy-ss[q-1].cy>0.9*mg)anc.push({y:ss[q].cy-off-0.12*npc,v:0,fake:1})})}
  anc.forEach(function(n){if(!heads.some(function(g){return g.cy>n.y-0.15*npc&&g.cy<n.y+0.4*npc}))miss.push({y0:n.y-0.15*npc,y1:n.y+0.5*npc})});
  miss=miss.sort(function(a,b){return a.y0-b.y0}).filter(function(m,i,ar){return i===0||m.y0-ar[i-1].y0>0.5*npc});
  return{entries:entries,meanPct:(mx-minX)/pw,mode:"table",meta:{bandL:bandL,bandR:bandR,off:off,pitch:pitch,leftL:minX,hx:hx,miss:miss}}}
@@ -687,6 +698,51 @@ async function ocrPdfWords(buf){var w=await getOcr2();await loadScript(PDF_URL);
  for(var p=1;p<=max;p++){ocrLabel="PDF "+p+"/"+max+"쪽";var pg=await doc.getPage(p),b=pg.getViewport({scale:1}),sc=Math.max(1,Math.min(4,2800/Math.max(b.width,b.height))),vp=pg.getViewport({scale:sc}),cv=document.createElement("canvas");
   cv.width=vp.width;cv.height=vp.height;await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;var r=await w.recognize(cv);pages.push(ocrToWords(r.data));rows=rows.concat(ocrRows(r.data.text))}
  return{pages:pages,rows:rows}}
+/*COLS-START*/
+var COLS=null,BC;try{COLS=JSON.parse(localStorage.getItem("wtm_cols")||"null")}catch(e){}
+function colsSave(){try{if(COLS)localStorage.setItem("wtm_cols",JSON.stringify(COLS));else localStorage.removeItem("wtm_cols")}catch(e){}}
+var CE=null;
+function cmRect(k){return CE[k]}
+function cmDraw(){var c=$("cmc"),x=c.getContext("2d");x.drawImage(CE.cv,0,0,c.width,c.height);
+ [["w","#2563eb","① 영어 단어"],["m","#ea580c","② 한글 뜻"]].forEach(function(a){var r=CE[a[0]];if(!r)return;var X=r.x0*c.width,Y=r.y0*c.height,Wd=(r.x1-r.x0)*c.width,Hd=(r.y1-r.y0)*c.height;
+  x.fillStyle=a[1]+"33";x.fillRect(X,Y,Wd,Hd);x.lineWidth=3;x.strokeStyle=a[1];x.strokeRect(X,Y,Wd,Hd);x.fillStyle=a[1];x.font="bold 15px sans-serif";x.fillText(a[2],X+4,Math.max(16,Y-5))})}
+function cmStep(k){CE.step=k;$("cmB0").classList.toggle("on",k===0);$("cmB1").classList.toggle("on",k===1);
+ $("cmH").textContent=k===0?"① 영어 단어 칸: 영어 단어가 세로로 늘어선 부분을 첫 줄부터 마지막 줄까지 드래그하세요. 파생어 줄(뜻이 같이 적힌 줄)도 포함하고, 예문은 빼 주세요.":"② 한글 뜻 칸: 한글 뜻이 있는 부분을 첫 줄부터 마지막 줄까지 드래그하세요. 예문은 빼 주세요.";
+ $("cmOk").disabled=!(CE.w&&CE.m)}
+function cmPos(e){var c=$("cmc"),b=c.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-b.left)/b.width)),y:Math.max(0,Math.min(1,(e.clientY-b.top)/b.height))}}
+(function(){var c=$("cmc"),st=null;
+ c.addEventListener("pointerdown",function(e){if(!CE)return;e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch(x){}st=cmPos(e);var k=CE.step?"m":"w";CE[k]={x0:st.x,y0:st.y,x1:st.x,y1:st.y};cmDraw()});
+ c.addEventListener("pointermove",function(e){if(!CE||!st)return;var p=cmPos(e),k=CE.step?"m":"w";CE[k]={x0:Math.min(st.x,p.x),y0:Math.min(st.y,p.y),x1:Math.max(st.x,p.x),y1:Math.max(st.y,p.y)};cmDraw()});
+ function end(e){if(!CE||!st)return;st=null;var k=CE.step?"m":"w",r=CE[k];if(r&&(r.x1-r.x0<0.02||r.y1-r.y0<0.03))CE[k]=null;cmDraw();
+  if(CE[k]&&!CE.step)cmStep(1);else cmStep(CE.step)}
+ c.addEventListener("pointerup",end);c.addEventListener("pointercancel",end)})();
+function askCols(cv){return new Promise(function(res){
+ CE={cv:cv,res:res,step:0,w:null,m:null};
+ if(COLS){CE.w={x0:COLS.w[0],x1:COLS.w[1],y0:COLS.y[0],y1:COLS.y[1]};CE.m={x0:COLS.m[0],x1:COLS.m[1],y0:COLS.y[0],y1:COLS.y[1]}}
+ var c=$("cmc"),s=Math.min(1,Math.min(window.innerWidth-48,900)/cv.width,Math.max(240,window.innerHeight*0.62)/cv.height);
+ c.width=Math.max(200,Math.round(cv.width*s));c.height=Math.max(200,Math.round(cv.height*s));
+ $("cm").hidden=false;cmDraw();cmStep(CE.w&&CE.m?1:0)})}
+function cmClose(v){var r=CE&&CE.res;CE=null;$("cm").hidden=true;if(r)r(v)}
+$("cmB0").onclick=function(){if(CE)cmStep(0)};$("cmB1").onclick=function(){if(CE)cmStep(1)};
+$("cmClr").onclick=function(){if(!CE)return;CE.w=null;CE.m=null;cmDraw();cmStep(0)};
+$("cmSkip").onclick=function(){cmClose(null)};
+$("cmOk").onclick=function(){if(!CE||!CE.w||!CE.m)return;var a=CE.w,b=CE.m;if(a.x0>b.x0){var t=a;a=b;b=t}
+ var y0=Math.max(0,Math.min(a.y0,b.y0)-0.005),y1=Math.min(1,Math.max(a.y1,b.y1)+0.005);
+ COLS={w:[a.x0,a.x1],m:[b.x0,b.x1],y:[y0,y1]};colsSave();cmClose(COLS)};
+function colsPx(F,cv){return{w0:F.w[0]*cv.width,w1:F.w[1]*cv.width,m0:F.m[0]*cv.width,m1:F.m[1]*cv.width}}
+async function ocrCols(cv,F){var w=await getOcr(),px=colsPx(F,cv),W=cv.width,H=cv.height,
+ x0=Math.min(px.w0,px.m0)-0.02*W,x1=Math.max(px.w1,px.m1)+0.02*W,y0=F.y[0]*H,y1=F.y[1]*H,sc=Math.max(1,Math.min(2,1500/Math.max(1,x1-x0))),best=null;
+ var c=cropCanvas(cv,x0,y0,x1,y1,sc);if(!c)throw new Error("img");
+ var ps=[11,6,3];
+ for(var i=0;i<ps.length;i++){if(best&&best.sc>=18)break;
+  try{await w.setParameters({tessedit_pageseg_mode:String(ps[i]),preserve_interword_spaces:"1"})}catch(e){}
+  var r=await w.recognize(c),ws=ocrToWords(r.data).map(function(x){var o={};for(var k in x)o[k]=x[k];o.x0=x.x0/sc+c._ox;o.x1=x.x1/sc+c._ox;o.y0=x.y0/sc+c._oy;o.y1=x.y1/sc+c._oy;return o}),
+   b=parseBest(ws,null,true,null,px),s=b?b.sc:0,nh=b?b.fin.filter(function(e){return!e.sub}).length:0;
+  if(!best||s>best.sc||(s===best.sc&&nh>best.nh))best={words:ws,sc:s,nh:nh}}
+ var b0=parseBest(best.words,null,true,null,px);if(b0)best.words=await rescueMeans(w,best.words,cv,px);
+ return{words:best.words,cv:cv,rot:0,cols:px,sc:best.sc}}
+/*COLS-END*/
+
 function pgObj(w,label,extra){var o={w:w,label:label};if(extra)for(var k in extra)o[k]=extra[k];return o}
 async function openPdf(buf){await loadScript(PDF_URL);var lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc=PDF_WORKER;return lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise}
 async function pdfHasText(buf){var doc=await openPdf(buf),n=Math.min(doc.numPages,6);
@@ -696,14 +752,14 @@ function rot180(cv){var c=document.createElement("canvas");c.width=cv.width;c.he
 function pageEval(w){var b=parseBest(w,null,true),q=w.filter(function(x){return x.c>=70&&/^[A-Za-z']{3,}$/.test(x.t)}).length;return{sc:b?b.sc:0,q:q,ex:cdExercise(w)}}
 function cropCanvas(cv,x0,y0,x1,y1,sc){x0=Math.max(0,Math.round(x0));y0=Math.max(0,Math.round(y0));x1=Math.min(cv.width,Math.round(x1));y1=Math.min(cv.height,Math.round(y1));if(x1-x0<8||y1-y0<8)return null;sc=sc||1;
  var c=document.createElement("canvas");c.width=Math.round((x1-x0)*sc);c.height=Math.round((y1-y0)*sc);c.getContext("2d").drawImage(cv,x0,y0,x1-x0,y1-y0,0,0,c.width,c.height);c._ox=x0;c._oy=y0;c._sc=sc;return c}
-async function rescueMeans(w,words,cv){
+async function rescueMeans(w,words,cv,cols){
  function cp(arr){return(arr||words).map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}})}
  async function rec(c,psm){try{await w.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:"1"})}catch(e){}
   var r=await w.recognize(c);return ocrToWords(r.data).filter(function(x){return x.c>=45&&/[가-힣]/.test(x.t)}).map(function(x){return{t:x.t,x0:x.x0/(c._sc||1)+c._ox,y0:x.y0/(c._sc||1)+c._oy,x1:x.x1/(c._sc||1)+c._ox,y1:x.y1/(c._sc||1)+c._oy,c:x.c,ln:null}})}
  async function recL(c,psm){try{await w.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:"1"})}catch(e){}
   var r=await w.recognize(c);return ocrToWords(r.data).filter(function(x){return x.c>=40&&/^[A-Za-z][A-Za-z'\-]{2,}$/.test(x.t)}).map(function(x){return{t:x.t,x0:x.x0/(c._sc||1)+c._ox,y0:x.y0/(c._sc||1)+c._oy,x1:x.x1/(c._sc||1)+c._ox,y1:x.y1/(c._sc||1)+c._oy,c:x.c,ln:null}})}
- var t=null,b=null;try{t=parseTable(cp())}catch(e){}
- if(t&&t.entries.filter(function(e){return!e.sub}).length>=4&&t.meta.miss&&t.meta.miss.length){
+ var NH=cols?2:4,PO=cols?{cols:cols}:undefined,t=null,b=null;try{t=parseTable(cp(),PO)}catch(e){}
+ if(t&&t.entries.filter(function(e){return!e.sub}).length>=NH&&t.meta.miss&&t.meta.miss.length){
   var m0=t.meta,addH=[];
   for(var j=0;j<Math.min(8,m0.miss.length);j++){var ms=m0.miss[j];
    try{var cH=cropCanvas(cv,Math.max(0,m0.hx-0.05*cv.width),ms.y0,m0.bandL,ms.y1);if(!cH)continue;
@@ -711,9 +767,9 @@ async function rescueMeans(w,words,cv){
     got=got.filter(function(g){return Math.abs(g.x0-m0.hx)<0.07*cv.width}).sort(function(a,b){return(b.y1-b.y0)-(a.y1-a.y0)});
     if(got.length)addH.push(got[0])}catch(e){}}
   if(addH.length){var w2=words.filter(function(x){return!addH.some(function(a){var xc=(x.x0+x.x1)/2,yc=(x.y0+x.y1)/2;return xc>=a.x0-4&&xc<=a.x1+4&&yc>=a.y0-4&&yc<=a.y1+4})}).concat(addH);
-   var t2=null;try{t2=parseTable(cp(w2))}catch(e){}
+   var t2=null;try{t2=parseTable(cp(w2),PO)}catch(e){}
    if(t2&&t2.entries.filter(function(e){return!e.sub}).length>=t.entries.filter(function(e){return!e.sub}).length){words=w2;t=t2}}}
- if(t&&t.entries.filter(function(e){return!e.sub}).length>=4){
+ if(t&&t.entries.filter(function(e){return!e.sub}).length>=NH){
   var mt=t.meta,miss=t.entries.filter(function(e){return!e.sub&&(String(e.raw).replace(/[^가-힣]/g,"").length<2)}).slice(0,14),keep=words,add=[];
   for(var i=0;i<miss.length;i++){var cy=miss[i].y+mt.off,r0=cy-0.55*mt.pitch,r1=cy+0.55*mt.pitch;
    try{var ws=[],ct=cropCanvas(cv,mt.bandL,cy-0.15*mt.pitch,mt.bandR,cy+0.15*mt.pitch,2);if(ct)ws=await rec(ct,7);
@@ -721,6 +777,7 @@ async function rescueMeans(w,words,cv){
     else{var c1=cropCanvas(cv,mt.bandL,r0,mt.bandR,r1);if(!c1)continue;ws=await rec(c1,6)}
     if(ws.length){keep=keep.filter(function(x){var xc=(x.x0+x.x1)/2,yc=(x.y0+x.y1)/2;return!(xc>=mt.bandL&&xc<=mt.bandR&&yc>=r0&&yc<=r1&&/[가-힣]/.test(x.t))});add=add.concat(ws)}}catch(e){}}
   return add.length?keep.concat(add):words}
+ if(cols)return words;
  try{b=parseCards(cp())}catch(e){}
  if(!b||b.entries.length<3||b.entries.length>24)return words;
  var miss2=b.entries.filter(function(e){return!e.raw&&e.bx}).slice(0,12),add2=[];
@@ -741,7 +798,9 @@ async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11]
  var b0=parseBest(best.words,null,true);if(b0)best.words=await rescueMeans(w,best.words,best.cv);
  return best}
 async function importOne2(f){var name=f.name.toLowerCase();
- if(/\.(png|jpe?g|webp|bmp|gif|heic|heif)$/.test(name)){var cv=prepCanvas(await loadBitmap(f));ocrLabel=f.name;var r=await ocrScan(cv,[3,6,11]);return{pages:[pgObj(r.words,f.name,{thumb:thumbOf(r.cv),ex:false})],rows:[]}}
+ if(/\.(png|jpe?g|webp|bmp|gif|heic|heif)$/.test(name)){var cv=prepCanvas(await loadBitmap(f));ocrLabel=f.name;
+  if($("colUse").checked&&BC===undefined){$("imsg").textContent="단어 칸과 뜻 칸을 사진 위에 그려 주세요.";BC=await askCols(cv)}
+  var r=BC?await ocrCols(cv,BC):await ocrScan(cv,[3,6,11]);return{pages:[pgObj(r.words,f.name,{thumb:thumbOf(r.cv),ex:false,cols:r.cols||null})],rows:[]}}
  if(/\.pdf$/.test(name)){var buf=await f.arrayBuffer();
   if(await pdfHasText(buf)){var pg=await readPdfWords(buf);return{pages:pg.map(function(a,i){return pgObj(a,f.name.replace(/\.pdf$/i,"")+" p."+(i+1))}).filter(function(o){return o.w.length>8}),rows:await readPdf(buf)}}
   return{scan:{name:f.name,buf:buf}}}
@@ -753,7 +812,7 @@ function errMsg(e,n){var t=e&&e.message;
  t==="img"?n+": 사진을 열지 못했어요. JPG나 PNG로 바꿔서 다시 시도해 주세요.":
  n+": 파일을 읽지 못했어요. 파일이 손상됐거나 암호가 걸려 있을 수 있어요."}
 var SCANQ=[],PK=null,TQ=Promise.resolve();
-async function importFiles(files){var m=$("imsg"),direct=[],pages=[],rows=[];$("rv").hidden=true;$("pk").hidden=true;SCANQ=[];PK=null;
+async function importFiles(files){BC=undefined;var m=$("imsg"),direct=[],pages=[],rows=[];$("rv").hidden=true;$("pk").hidden=true;SCANQ=[];PK=null;
  for(var i=0;i<files.length;i++){m.textContent="읽는 중... ("+files[i].name+")";
   try{var o=await importOne2(files[i]);if(o.pairs)direct=direct.concat(o.pairs);else if(o.scan)SCANQ.push(o.scan);else{pages=pages.concat(o.pages);rows=rows.concat(o.rows||[])}}
   catch(e){m.textContent=errMsg(e,files[i].name);return}}
@@ -792,7 +851,8 @@ $("pkGo").onclick=async function(){if(!PK||PK.busy)return;var ps=parseRange($("p
   for(var i=0;i<ps.length&&!P.stop;i++){var p=ps[i];ocrLabel=P.name.replace(/\.pdf$/i,"")+" "+(i+1)+"/"+total+"쪽(p."+p+")";m.textContent=ocrLabel+" 준비 중...";
    var pg=await P.doc.getPage(p),b=pg.getViewport({scale:1}),sc=Math.max(1,Math.min(5,2800/Math.max(b.width,b.height))),vp=pg.getViewport({scale:sc}),cv=document.createElement("canvas");
    cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
-   var r=await ocrScan(prepCanvas(cv,2800));got.push(pgObj(r.words,P.name.replace(/\.pdf$/i,"")+" p."+p,{thumb:thumbOf(r.cv),ex:r.ex,rot:r.rot}));clean+=r.sc>0?Math.round(r.sc/3):0;
+   var pc=prepCanvas(cv,2800);if($("colUse").checked&&BC===undefined){m.textContent="단어 칸과 뜻 칸을 쪽 위에 그려 주세요.";BC=await askCols(pc)}
+   var r=BC?await ocrCols(pc,BC):await ocrScan(pc);got.push(pgObj(r.words,P.name.replace(/\.pdf$/i,"")+" p."+p,{thumb:thumbOf(r.cv),ex:r.ex,rot:r.rot,cols:r.cols||null}));clean+=r.sc>0?Math.round(r.sc/3):0;
    m.textContent=(i+1)+"/"+total+"쪽 완료 (p."+p+(r.rot?", 뒤집힌 쪽을 돌려서 읽음":"")+")"}
  }catch(e){m.textContent=errMsg(e,P.name);P.busy=false;$("pkGo").disabled=false;$("pkStop").hidden=true;if(!got.length)return}
  P.busy=false;$("pkStop").hidden=true;$("pk").hidden=true;PK=null;
@@ -804,12 +864,12 @@ function addPairs(all){var m=$("imsg");
  if(!all.length){m.textContent="단어와 뜻 쌍을 찾지 못했어요. 영어 단어와 한글 뜻이 같은 줄이나 옆 칸에 있는 파일인지 확인해 주세요.";return}
  var ta=$("words");ta.value=(ta.value.trim()?ta.value.trim()+"\n":"")+all.map(function(p){return p.en+" - "+p.ko}).join("\n");parse();
  m.textContent=all.length+"개의 단어를 입력창에 넣었어요. 내용을 확인하고 잘못 읽힌 줄은 고쳐 주세요."}
-function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").checked,items=[],pct=null,nv=0,nc=0,nt=0;
- RV.pages.forEach(function(pg){var b=parseBest(pg.w,RV.meanOv,strip,RV.force);if(!b)return;
+function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").checked,items=[],pct=null,nv=0,nc=0,nt=0,ncol=0;
+ RV.pages.forEach(function(pg){var b=parseBest(pg.w,RV.meanOv,strip,pg.cols?null:RV.force,pg.cols||null);if(!b)return;if(pg.cols)ncol++;
   if(b.m==="V"){nv++;if(pct==null)pct=b.r.meanPct}else if(b.m==="T")nt++;else nc++;
   var ex=pg.ex!=null?pg.ex:cdExercise(pg.w);
   b.fin.forEach(function(e){e.pg=pg.label;e.thumb=pg.thumb;e.ex=!!ex;items.push(e)})});
- var good=items.filter(function(e){return!e.sub&&e.ko}).length;RV.generic=false;RV.nv=nv;RV.nc=nc;RV.nt=nt;
+ var good=items.filter(function(e){return!e.sub&&e.ko}).length;RV.generic=false;RV.nv=nv;RV.nc=nc;RV.nt=nt;RV.ncol=ncol;
  if(good<2&&RV.rows.length){items=[];RV.generic=true;RV.rows.forEach(function(r){rowPairs(r).forEach(function(p){items.push({en:p.en,ko:p.ko,sub:false,warn:vWarn(p.en,p.ko,100)})})})}
  items.forEach(function(e){e.on=(e.sub?sub:!!e.ko)&&!e.ex});RV.items=items;
  if(pct!=null&&RV.meanOv==null)$("rvSl").value=Math.round(pct*100);
@@ -817,7 +877,7 @@ function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").che
 function renderRV(){var m=$("imsg");
  if(!RV.items.length){$("rv").hidden=true;m.textContent="단어와 뜻을 찾지 못했어요. 사진이 흐리거나 너무 비스듬하면 인식이 어려워요. 정면에서 밝게 다시 찍거나, 스캔본이면 단어가 있는 쪽을 골라 다시 읽어 보세요.";return}
  var n=RV.items.filter(function(e){return!e.sub}).length,sub=RV.items.length-n,wr=RV.items.filter(function(e){return e.warn.length}).length,ex=RV.items.filter(function(e){return e.ex}).length;
- $("rvinfo").textContent=(RV.generic?"표 형식으로 읽었어요. ":"쪽마다 알맞은 읽기 방식(표제어·뜻 목록"+(RV.nv?" "+RV.nv+"쪽":"")+" / 그림 카드"+(RV.nc?" "+RV.nc+"쪽":"")+" / 열 표"+(RV.nt?" "+RV.nt+"쪽":"")+")을 골랐어요. ")+"단어 "+n+"개"+(sub?", 파생어 "+sub+"개":"")+(wr?" · 확인이 필요한 줄 "+wr+"개":"")+(ex?" · 문제 쪽으로 보이는 줄 "+ex+"개는 선택을 꺼 뒀어요":"");
+ $("rvinfo").textContent=(RV.ncol?"지정한 칸(영어 단어·한글 뜻)만 읽었어요. ":RV.generic?"표 형식으로 읽었어요. ":"쪽마다 알맞은 읽기 방식(표제어·뜻 목록"+(RV.nv?" "+RV.nv+"쪽":"")+" / 그림 카드"+(RV.nc?" "+RV.nc+"쪽":"")+" / 열 표"+(RV.nt?" "+RV.nt+"쪽":"")+")을 골랐어요. ")+"단어 "+n+"개"+(sub?", 파생어 "+sub+"개":"")+(wr?" · 확인이 필요한 줄 "+wr+"개":"")+(ex?" · 문제 쪽으로 보이는 줄 "+ex+"개는 선택을 꺼 뒀어요":"");
  $("rvSlWrap").hidden=RV.generic||!RV.nv;$("rvSlv").textContent=$("rvSl").value+"%";
  var h='<tr><th></th><th>영어</th><th>뜻 (여러 개면 쉼표로)</th><th></th></tr>';
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'});
