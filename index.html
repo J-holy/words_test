@@ -91,6 +91,11 @@ tr.w td{height:38px}
 <div class="mute" style="margin-top:6px">구분은 -, :, =, 탭, 띄어쓰기 중 무엇이든 괜찮아요. 엑셀에서 두 열을 복사해 붙여넣어도 됩니다.</div>
 <div class="row"><button class="btn" id="pick" type="button">📂 파일에서 불러오기</button><input id="file" type="file" accept=".xlsx,.xls,.csv,.txt,.pdf,.png,.jpg,.jpeg,.webp,.heic,.heif" multiple style="display:none"><span class="mute">엑셀·CSV·TXT·PDF·사진(글자 인식) 지원 (입력창에 끌어다 놓아도 돼요)</span></div>
 <div class="row" style="margin-top:6px"><label style="display:flex;gap:6px;align-items:flex-start"><input type="checkbox" id="colUse" style="margin-top:3px"><span><b>단어·뜻 칸을 직접 지정해서 읽기</b> <span class="mute">(예문이 섞이거나 잘못 읽힐 때 추천 · 사진·스캔 쪽을 올리면 칸을 그리는 화면이 나와요. 같은 책이면 지난번 칸이 미리 그려져 있어 확인만 하면 돼요)</span></span></label></div>
+<details id="srvBox" style="margin-top:6px"><summary><b>내 서버(라즈베리파이)로 글자 읽기</b> <span class="mute" id="srvSt"></span></summary>
+<div class="row"><label><input type="checkbox" id="srvUse"> 내 서버로 읽기 (끄면 이 브라우저에서 읽어요)</label></div>
+<div class="row"><span class="mute">서버 주소</span><input type="text" id="srvUrl" placeholder="https://pi.xxxx.ts.net" style="flex:1;min-width:200px" autocomplete="off"></div>
+<div class="row"><span class="mute">비밀번호</span><input type="password" id="srvTok" style="flex:1;min-width:160px" autocomplete="off"><button class="btn" id="srvTest" type="button">연결 확인</button></div>
+<div class="mute" id="srvMsg">서버는 Tailscale이 켜진 기기에서만 접속돼요. 사진은 내 서버로만 전달돼요.</div></details>
 <div id="imsg" class="mute" role="status" style="min-height:20px"></div>
 <div id="pk" class="card" hidden style="margin-top:10px">
 <h2>읽을 쪽 고르기</h2>
@@ -596,6 +601,7 @@ function parseTable(W,opt){opt=opt||{};
  var left=T.filter(function(o){return!o.ko&&(C?(o.x0>=C.w0-0.02*pw&&o.x0<=C.w1):Math.abs(o.x0-hx)<=tolX*1.6)&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3}),heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
  left.forEach(function(o){
   if(/^[\[\{\(]|[\]\}\)]$|[^\x00-\x7F]/.test(String(o.raw).trim()))return;
+  if(/^(adj|adv|prep|conj|pron|noun|verb)$/i.test(o.t))return;
   if(T.some(function(m){return m!==o&&/^[\[\{\(]$/.test(String(m.raw).trim())&&Math.abs(m.cy-o.cy)<0.6*o.h&&o.x0-m.x1<0.03*pw&&o.x0-m.x1>-5}))return;
   var rowm=T.filter(function(m){return m!==o&&Math.abs(m.cy-o.cy)<0.6*Math.max(o.h,m.h)&&m.x0>o.x1&&(C?(m.x0+m.x1)/2<bandL:m.x0<bandL)&&m.c>=40&&(m.ko||POS.test(String(m.raw).trim()))}),
    mates=rowm.filter(function(m){return m.ko});
@@ -643,7 +649,7 @@ function parseTable(W,opt){opt=opt||{};
 
 
 var TESS_URL="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",ocrW=null,ocrLabel="";
-async function getOcr(){if(ocrW)return ocrW;
+async function getOcr(){if(window.SRV&&SRV.on())return srvWorker();if(ocrW)return ocrW;
  try{await loadScript(TESS_URL);
   ocrW=await Tesseract.createWorker("kor+eng",1,{logger:function(m){var el=$("imsg");if(m.status==="recognizing text")el.textContent=ocrLabel+" 글자 인식 중 "+Math.round(m.progress*100)+"%";else el.textContent="OCR 준비 중... 처음에는 한글·영어 데이터를 내려받느라 시간이 걸려요."}})
  }catch(e){ocrW=null;throw new Error("ocr")}
@@ -698,6 +704,28 @@ async function ocrPdfWords(buf){var w=await getOcr2();await loadScript(PDF_URL);
  for(var p=1;p<=max;p++){ocrLabel="PDF "+p+"/"+max+"쪽";var pg=await doc.getPage(p),b=pg.getViewport({scale:1}),sc=Math.max(1,Math.min(4,2800/Math.max(b.width,b.height))),vp=pg.getViewport({scale:sc}),cv=document.createElement("canvas");
   cv.width=vp.width;cv.height=vp.height;await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;var r=await w.recognize(cv);pages.push(ocrToWords(r.data));rows=rows.concat(ocrRows(r.data.text))}
  return{pages:pages,rows:rows}}
+/*SRV-START*/
+var SRV={url:"",tok:"",use:false};try{var _s=JSON.parse(localStorage.getItem("wtm_srv")||"{}");SRV.url=_s.url||"";SRV.tok=_s.tok||"";SRV.use=!!_s.use}catch(e){}
+SRV.on=function(){return SRV.use&&!!String(SRV.url).trim()};
+function srvSave(){try{localStorage.setItem("wtm_srv",JSON.stringify({url:SRV.url,tok:SRV.tok,use:SRV.use}))}catch(e){}}
+function srvBase(){return String(SRV.url).trim().replace(/\/+$/,"")}
+function toBlob(c){return new Promise(function(res,rej){if(typeof Blob!=="undefined"&&c instanceof Blob)return res(c);c.toBlob(function(b){b?res(b):rej(new Error("img"))},"image/jpeg",0.9)})}
+function srvWorker(){return{setParameters:function(){return Promise.resolve()},recognize:async function(c){var b=await toBlob(c),r;
+  try{$("imsg").textContent=(ocrLabel||"")+" 내 서버에서 글자 읽는 중..."}catch(e){}
+  try{r=await fetch(srvBase()+"/ocr",{method:"POST",headers:{"X-Token":SRV.tok,"Content-Type":"application/octet-stream"},body:b})}catch(e){throw new Error("srv")}
+  if(r.status===401)throw new Error("srvtok");if(!r.ok)throw new Error("srv");
+  var j=await r.json(),rows=["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"];
+  (j.words||[]).forEach(function(w,i){rows.push(["5",1,w.ln,1,1,i+1,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1-w.x0),Math.round(w.y1-w.y0),w.c,w.t].join("\t"))});
+  return{data:{tsv:rows.join("\n"),text:(j.words||[]).map(function(w){return w.t}).join(" ")}}}}}
+function srvStatus(){var s=$("srvSt");if(s)s.textContent=SRV.on()?"· 사용 중":(SRV.url?"· 꺼짐":"· 설정 안 함")}
+(function(){var u=$("srvUrl"),t=$("srvTok"),c=$("srvUse");u.value=SRV.url;t.value=SRV.tok;c.checked=SRV.use;srvStatus();
+ function sv(){SRV.url=u.value.trim();SRV.tok=t.value;SRV.use=c.checked;srvSave();srvStatus()}
+ u.oninput=t.oninput=c.onchange=sv;
+ $("srvTest").onclick=async function(){sv();var m=$("srvMsg");if(!SRV.url){m.textContent="서버 주소를 먼저 넣어 주세요.";return}m.textContent="연결 확인 중...";
+  try{var r=await fetch(srvBase()+"/health",{headers:{"X-Token":SRV.tok}}),j=await r.json();m.textContent=j.ok?("연결됐어요 (엔진: "+j.engine+") · 비밀번호 "+(j.auth?"맞음":"안 맞음 — 서버의 OCR_TOKEN과 같게 넣어 주세요")):"서버가 응답했지만 상태가 이상해요."}
+  catch(e){m.textContent="연결하지 못했어요. 파이가 켜져 있는지, 이 기기에서 Tailscale이 켜져 있는지, 주소가 맞는지 확인해 주세요."}}})();
+/*SRV-END*/
+
 /*COLS-START*/
 var COLS=null,BC;try{COLS=JSON.parse(localStorage.getItem("wtm_cols")||"null")}catch(e){}
 function colsSave(){try{if(COLS)localStorage.setItem("wtm_cols",JSON.stringify(COLS));else localStorage.removeItem("wtm_cols")}catch(e){}}
@@ -733,7 +761,7 @@ function colsPx(F,cv){return{w0:F.w[0]*cv.width,w1:F.w[1]*cv.width,m0:F.m[0]*cv.
 async function ocrCols(cv,F){var w=await getOcr(),px=colsPx(F,cv),W=cv.width,H=cv.height,
  x0=Math.min(px.w0,px.m0)-0.02*W,x1=Math.max(px.w1,px.m1)+0.02*W,y0=F.y[0]*H,y1=F.y[1]*H,sc=Math.max(1,Math.min(2,1500/Math.max(1,x1-x0))),best=null;
  var c=cropCanvas(cv,x0,y0,x1,y1,sc);if(!c)throw new Error("img");
- var ps=[11,6,3];
+ var ps=SRV.on()?[3]:[11,6,3];
  for(var i=0;i<ps.length;i++){if(best&&best.sc>=18)break;
   try{await w.setParameters({tessedit_pageseg_mode:String(ps[i]),preserve_interword_spaces:"1"})}catch(e){}
   var r=await w.recognize(c),ws=ocrToWords(r.data).map(function(x){var o={};for(var k in x)o[k]=x[k];o.x0=x.x0/sc+c._ox;o.x1=x.x1/sc+c._ox;o.y0=x.y0/sc+c._oy;o.y1=x.y1/sc+c._oy;return o}),
@@ -786,7 +814,7 @@ async function rescueMeans(w,words,cv,cols){
    if(!ws2.length){var wd=bx[2]-bx[0],d2=cropCanvas(cv,bx[0]-0.5*wd-0.5*h,bx[3],bx[2]+0.5*wd+0.5*h,bx[3]+2.4*h);if(d2)ws2=await rec(d2,6)}}catch(e){}
   add2=add2.concat(ws2)}
  return add2.length?words.concat(add2):words}
-async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11];
+async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11];if(SRV.on())psms=[3];
  async function run(c,psm){try{await w.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:"1"})}catch(e){}var r=await w.recognize(c);return ocrToWords(r.data)}
  function mk(words,c,rot,psm){var o=pageEval(words);o.words=words;o.cv=c;o.rot=rot;o.psm=psm;return o}
  function better(o,b){return!b||o.sc>b.sc||(o.sc===b.sc&&o.q>b.q)}
@@ -808,6 +836,8 @@ async function importOne2(f){var name=f.name.toLowerCase();
 function errMsg(e,n){var t=e&&e.message;
  return t==="type"?n+": 지원하지 않는 형식이에요. 엑셀(xlsx, xls), CSV, TXT, PDF, 사진(png, jpg, heic)만 가능해요.":
  t==="ocr"?"글자 인식(OCR)을 시작하지 못했어요. 이 기능은 인터넷 연결이 필요하고, Claude 미리보기 화면에서는 작동하지 않을 수 있어요. 호스팅한 주소나 파일을 브라우저에서 직접 열어 다시 시도해 주세요.":
+ t==="srv"?"내 서버에 연결하지 못했어요. 파이가 켜져 있는지, 이 기기에서 Tailscale이 켜져 있는지, 서버 주소가 맞는지 확인해 주세요. '내 서버로 읽기'를 끄면 브라우저에서 읽어요.":
+ t==="srvtok"?"내 서버 비밀번호가 맞지 않아요. 설정의 비밀번호를 서버의 OCR_TOKEN과 같게 넣어 주세요.":
  t==="load"?"파일을 읽는 도구를 내려받지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.":
  t==="img"?n+": 사진을 열지 못했어요. JPG나 PNG로 바꿔서 다시 시도해 주세요.":
  n+": 파일을 읽지 못했어요. 파일이 손상됐거나 암호가 걸려 있을 수 있어요."}
