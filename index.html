@@ -577,7 +577,7 @@ function parseTable(W,opt){opt=opt||{};
  var H=vmed(W.map(function(w){return w.y1-w.y0}))||20;
  var T=W.map(function(w){var ko=vHan(w.t);return{t:cdClean(String(w.t).trim(),ko),raw:w.t,ko:ko,x0:w.x0,x1:w.x1,y0:w.y0,y1:w.y1,cy:(w.y0+w.y1)/2,h:w.y1-w.y0,c:w.c==null?100:w.c,ln:w.ln}}).filter(function(o){return o.t});
  /* 1. left column x from the row numbers (3-4 digits) */
- var C=opt.cols||null,nums=T.filter(function(o){return/^\d{3,4}$/.test(o.t)&&o.c>=35&&(C?o.x1<C.w0+0.02*pw&&o.x0>C.w0-0.15*pw:o.x0<minX+0.3*pw)}),hx,tolX,bandL,bandR,mx;
+ var C=opt.cols||null,nums=T.filter(function(o){return/^\d{3,4}$/.test(o.t)&&o.c>=35&&(C?o.x0<C.w1&&o.x0>C.w0-0.15*pw:o.x0<minX+0.3*pw)}),hx,tolX,bandL,bandR,mx;
  if(C){hx=C.w0;tolX=Math.max(1,(C.w1-C.w0)/1.6);bandL=C.w1+0.3*Math.max(0,C.m0-C.w1);bandR=C.m1;mx=C.m0}
  else{
  if(nums.length<3)return null;
@@ -598,7 +598,17 @@ function parseTable(W,opt){opt=opt||{};
  bandL=midMin-0.07*pw;bandR=exStart-0.02*pw;
  }
  /* 3. left-column latin tokens: derived words (POS/Korean on the same row), pronunciations (skipped) and headwords */
- var left=T.filter(function(o){return!o.ko&&(C?(o.x0>=C.w0-0.02*pw&&o.x0<=C.w1):Math.abs(o.x0-hx)<=tolX*1.6)&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3}),heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
+ var PSW=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$/i,left;
+ if(C){
+  var ltk=function(o){return!o.ko&&!PSW.test(String(o.t).trim())&&/^[A-Za-z][A-Za-z'’\-]*[.…·]*$/.test(String(o.t).replace(/\s/g,""))};
+  var cand=T.filter(function(o){return ltk(o)&&o.c>=45}),st=cand.filter(function(o){return o.x0>=C.w0-0.02*pw&&o.x0<=C.w1}).sort(function(a,b){return a.cy-b.cy||a.x0-b.x0});left=[];
+  st.forEach(function(o){if(o._u)return;var ch=[o],cur=o;
+   for(;;){var nx=cand.filter(function(m){return m!==cur&&!m._u&&ch.indexOf(m)<0&&Math.abs(m.cy-cur.cy)<0.6*Math.max(m.h,cur.h)&&m.h>=0.6*cur.h&&m.h<=1.7*cur.h&&m.x0>=cur.x1-2&&m.x0-cur.x1<1.6*Math.max(cur.h,m.h)&&m.x0<C.m0}).sort(function(a,b){return a.x0-b.x0})[0];if(!nx)break;ch.push(nx);cur=nx}
+   ch.forEach(function(c){c._u=1});
+   var tx=ch.map(function(c){return String(c.t).replace(/[.…·]+$/,"")}).join(" ").trim();
+   if(!/^[A-Za-z][A-Za-z'’\- ]*$/.test(tx)||tx.replace(/[^A-Za-z]/g,"").length<3)return;
+   left.push({t:tx,raw:tx,ko:false,x0:ch[0].x0,x1:ch[ch.length-1].x1,y0:Math.min.apply(0,ch.map(function(c){return c.y0})),y1:Math.max.apply(0,ch.map(function(c){return c.y1})),cy:(ch[0].cy),h:Math.max.apply(0,ch.map(function(c){return c.h})),c:Math.min.apply(0,ch.map(function(c){return c.c})),ln:ch[0].ln})})
+ }else left=T.filter(function(o){return!o.ko&&Math.abs(o.x0-hx)<=tolX*1.6&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3});var heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
  left.forEach(function(o){
   if(/^[\[\{\(]|[\]\}\)]$|[^\x00-\x7F]/.test(String(o.raw).trim()))return;
   if(/^(adj|adv|prep|conj|pron|noun|verb)$/i.test(o.t))return;
@@ -613,6 +623,7 @@ function parseTable(W,opt){opt=opt||{};
  heads=heads.filter(function(o,i){if(o.h>=0.75*mH)return true;
   return!heads.some(function(g){return g!==o&&g.h>=0.75*mH&&o.cy>g.cy&&o.cy-g.cy<2.2*g.h})});
  subs=subs.filter(function(sb){return!heads.some(function(g){return false})});
+ if(C&&nums.length>=3){var sr=function(g){return nums.some(function(n){return Math.abs(n.cy-g.cy)<0.4*Math.max(n.h,g.h)})},nsr=heads.filter(sr).length;if(nsr>=0.6*heads.length)heads=heads.filter(sr)}
  if(heads.length<(C?2:4))return null;
 
  var pitch=tbMedian(heads.slice(1).map(function(h,i){return h.cy-heads[i].cy}).filter(function(d){return d>0.5*H}))||4*H;
@@ -620,7 +631,10 @@ function parseTable(W,opt){opt=opt||{};
  heads=heads.filter(function(h,i){return i===0||h.cy-heads[i-1].cy>0.45*pitch||h.h>heads[i-1].h});
  /* 4. Korean segments in the middle band */
  var mid=W.filter(function(w){var xc=C?(w.x0+w.x1)/2:w.x0;return xc>=bandL&&xc<bandR});
- var segs=cdSegs(mid,H).filter(function(s){return s.k==="k"&&s.c>=40&&!/^[은는을를]/.test(s.t)});
+ var allSg=cdSegs(mid,H),segs=allSg.filter(function(s){return s.k==="k"&&s.c>=40&&!/^[은는을를]/.test(s.t)});
+ if(C){segs=segs.filter(function(q){return!allSg.some(function(e){return e.k==="e"&&e.x1<=q.x0+0.2*q.h&&Math.abs(e.cy-q.cy)<0.5*Math.max(e.h,q.h)&&/[A-Za-z]{2,}/.test(e.t)})});
+  segs.forEach(function(q){q.t=q.t.replace(/^[명동형부전접대감조]\s+/,"").replace(/\s*[\(\（\[〔{][A-Za-z].*$/,"").trim()});segs=segs.filter(function(q){return/[가-힣]/.test(q.t)&&!/^[명동형부전접대감조]$/.test(q.t)})}
+ if(C&&segs.length>5){var mhh=tbMedian(segs.map(function(q){return q.h}));segs=segs.filter(function(q){return q.h<=1.3*mhh})}
  var dys=[];heads.forEach(function(h){var b=null,bd=1e9;segs.forEach(function(s){var d=s.cy-h.cy;if(Math.abs(d)<bd){bd=Math.abs(d);b=d}});if(b!=null&&bd<0.5*pitch)dys.push(b)});
  if(dys.length<Math.max(C?2:3,0.5*heads.length))return null;
  var off=tbMedian(dys);
@@ -630,7 +644,7 @@ function parseTable(W,opt){opt=opt||{};
  var entries=own.map(function(o){var ss=o.segs.sort(function(a,b){return a.cy-b.cy}),txt=ss.map(function(s){return s.t}).join(" ; ");
   return{en:o.h.t,raw:txt,conf:ss.length?vavg(ss.map(function(s){return s.c}).concat([o.h.c])):o.h.c,hc:o.h.c,sub:false,y:o.h.cy,x:o.h.x0,h:o.h.h}});
  var lens=entries.filter(function(e){return e.raw}).map(function(e){return e.raw.length});
- if(!lens.length||vavg(lens)>26)return null;
+ if(!lens.length||vavg(lens)>(C?90:26))return null;
  var pool=T.filter(function(o){return!o.ko&&o.x0>=bandL&&/^[A-Za-z][A-Za-z'’\-]{2,}$/.test(o.t)}).map(function(o){return o.t.toLowerCase()}),
  okH=function(e){var l=e.en.toLowerCase(),pre=l.length<=4?l:l.slice(0,-1);return pool.some(function(t){return t.indexOf(pre)===0})},
  nOk=entries.filter(okH).length;
@@ -714,7 +728,10 @@ function srvWorker(){return{setParameters:function(){return Promise.resolve()},r
   try{$("imsg").textContent=(ocrLabel||"")+" 내 서버에서 글자 읽는 중..."}catch(e){}
   try{r=await fetch(srvBase()+"/ocr",{method:"POST",headers:{"X-Token":SRV.tok,"Content-Type":"application/octet-stream"},body:b})}catch(e){throw new Error("srv")}
   if(r.status===401)throw new Error("srvtok");if(!r.ok)throw new Error("srv");
-  var j=await r.json(),rows=["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"];
+  var j=await r.json(),ws=j.words||[],byLn={};
+  ws.forEach(function(w){(byLn[w.ln]=byLn[w.ln]||[]).push(w)});
+  Object.keys(byLn).forEach(function(k){var a=byLn[k].sort(function(p,q){return p.x0-q.x0});for(var i=0;i<a.length-1;i++){var h=a[i].y1-a[i].y0;a[i].x1=Math.max(a[i].x0+0.25*h,a[i].x1-0.5*h)}});
+  j.words=ws;var rows=["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"];
   (j.words||[]).forEach(function(w,i){rows.push(["5",1,w.ln,1,1,i+1,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1-w.x0),Math.round(w.y1-w.y0),w.c,w.t].join("\t"))});
   return{data:{tsv:rows.join("\n"),text:(j.words||[]).map(function(w){return w.t}).join(" ")}}}}}
 function srvStatus(){var s=$("srvSt");if(s)s.textContent=SRV.on()?"· 사용 중":(SRV.url?"· 꺼짐":"· 설정 안 함")}
