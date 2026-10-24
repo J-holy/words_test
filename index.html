@@ -95,7 +95,8 @@ tr.w td{height:38px}
 <div class="row"><label><input type="checkbox" id="srvUse"> 내 서버로 읽기 (끄면 이 브라우저에서 읽어요)</label></div>
 <div class="row"><span class="mute">서버 주소</span><input type="text" id="srvUrl" placeholder="https://pi.xxxx.ts.net" style="flex:1;min-width:200px" autocomplete="off"></div>
 <div class="row"><span class="mute">비밀번호</span><input type="password" id="srvTok" style="flex:1;min-width:160px" autocomplete="off"><button class="btn" id="srvTest" type="button">연결 확인</button></div>
-<div class="mute" id="srvMsg">서버는 Tailscale이 켜진 기기에서만 접속돼요. 사진은 내 서버로만 전달돼요.</div></details>
+<div class="mute" id="srvMsg">사진은 내 서버로만 전달되고, 비밀번호가 맞아야 읽어 줘요.</div>
+<div class="row"><button class="btn" id="srvLink" type="button">다른 기기(폰·태블릿)용 연결 링크 만들기</button></div><div class="row"><input type="text" id="srvLinkOut" readonly hidden style="flex:1;min-width:200px"></div></details>
 <div id="imsg" class="mute" role="status" style="min-height:20px"></div>
 <div id="pk" class="card" hidden style="margin-top:10px">
 <h2>읽을 쪽 고르기</h2>
@@ -561,6 +562,9 @@ function cdSane(fin){fin.forEach(function(e){if(e.ko){e.ko=e.ko.replace(/^(명�
  return true})}
 function scoreFin(fin){var n=fin.filter(function(e){return!e.sub}).length,cl=fin.filter(function(e){return!e.sub&&e.ko&&!e.warn.length}).length;return cl*3+fin.filter(function(e){return!e.sub&&e.ko}).length-(n-cl)}
 function parseBest(w,meanOv,strip,force,cols){var c=[];
+ if(!force){try{var dm=parseDict(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols||null});
+  if(dm&&dm.entries.length>=3){var fd=vaFinish(dm,strip),gd=fd.filter(function(e){return e.ko&&e.ko.replace(/[^가-힣]/g,"").length>=2}).length;
+   if(gd>=0.4*fd.length&&gd>=2)return{m:"T",r:dm,fin:fd,sc:scoreFin(fd)+3000,dict:true}}}catch(e){}}
  if(cols){try{var tc=parseTable(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols});if(tc){var fc=cdSane(vaFinish(tc,strip));return{m:"T",r:tc,fin:fc,sc:scoreFin(fc)}}}catch(e){}return null}
  function cp(){return w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}})}
  if(!force||force==="V")try{var v=parseVoca(cp(),{meanX:meanOv});if(v)c.push({m:"V",r:v})}catch(e){}
@@ -662,6 +666,116 @@ function parseTable(W,opt){opt=opt||{};
  return{entries:entries,meanPct:(mx-minX)/pw,mode:"table",meta:{bandL:bandL,bandR:bandR,off:off,pitch:pitch,leftL:minX,hx:hx,miss:miss}}}
 /*TABLE-END*/
 
+/*DICT-START*/
+/* 번호(1583…)가 세로로 늘어선 어휘 사전형 쪽: 번호 줄마다 표제어를 잡고, 그 아래 뜻 칸에서 '첫 뜻 묶음'만 읽는다 */
+function dkPos(t){return/^[명동통형혐부접전대감조정수]{1,2}$/.test(t)}
+function dkCirc(t){return/^[①-⑩❶-❿⑴-⒇]$|^[\(]?[1-9][\.\)]$|^[1-9]$/.test(t)}
+function dkStripEn(s){
+ s=s.replace(/[\(\（\[〔{《][^\)\）\]〕}》]*[A-Za-z↔→][^\)\）\]〕}》]*[\)\）\]〕}》]/g,"");
+ s=s.replace(/[\(\（\[〔{《][^\)\）\]〕}》]*[A-Za-z↔→].*$/,"");
+ s=s.replace(/[A-Za-z][A-Za-z'’\-\/\.]*(\s+[A-Za-z][A-Za-z'’\-\/\.]*)*/g,"");
+ return s.replace(/\s+/g," ").replace(/\(\s*\)|\[\s*\]|《\s*》/g,"").trim()}
+function dkBal(s){var o=0,r="";for(var i=0;i<s.length;i++){var ch=s[i];if(ch==="(")o++;else if(ch===")"){if(o<=0)continue;o--}r+=ch}return r.replace(/\(\s*$/,"")}
+function dkFit(P){var n=P.length,sx=0,sy=0,sxy=0,syy=0;P.forEach(function(p){sx+=p.cx;sy+=p.cy;sxy+=p.cx*p.cy;syy+=p.cy*p.cy});var d=n*syy-sy*sy;if(!d)return{b:0,a:sx/n};var b=(n*sxy-sx*sy)/d;return{b:b,a:(sx-b*sy)/n}}
+function parseDict(W,opt){opt=opt||{};var C=opt.cols||null;
+ W=W.filter(function(w){return w.t&&String(w.t).trim()&&(w.c==null||w.c>=25)});if(W.length<30)return null;
+ var T=W.map(function(w){var r=String(w.t).trim();return{raw:r,ko:vHan(r),x0:w.x0,x1:w.x1,y0:w.y0,y1:w.y1,cx:(w.x0+w.x1)/2,cy:(w.y0+w.y1)/2,h:w.y1-w.y0,c:w.c==null?100:w.c,ln:w.ln}});
+ if(C){var sp=Math.max(1,C.m1-C.w0);T=T.filter(function(o){return o.cx>=C.w0-0.03*sp&&o.cx<=C.m1+0.03*sp})}
+ if(T.length<25)return null;
+ var minX=Math.min.apply(0,T.map(function(o){return o.x0})),maxX=Math.max.apply(0,T.map(function(o){return o.x1})),pw=Math.max(1,maxX-minX),Hm=tbMedian(T.map(function(o){return o.h}))||20;
+ /* 1. 번호 열 */
+ var nc=T.filter(function(o){return/^[1-9]\d{3}$/.test(o.raw)&&o.c>=30&&o.x0<minX+0.45*pw});
+ if(C)nc=nc.filter(function(o){return o.x0<C.w1+0.02*pw&&o.cx>C.w0-0.05*pw});
+ if(nc.length<3)return null;
+ nc.sort(function(a,b){return a.cx-b.cx});var grp=[],cur=[nc[0]];
+ for(var i=1;i<nc.length;i++){if(nc[i].cx-nc[i-1].cx>0.045*pw){grp.push(cur);cur=[]}cur.push(nc[i])}grp.push(cur);
+ grp.sort(function(a,b){return b.length-a.length});var N=grp[0].slice().sort(function(a,b){return a.cy-b.cy});
+ if(N.length<3)return null;
+ var ft=dkFit(N),b=ft.b;if(Math.abs(b)>0.15)b=0;
+ var res=N.map(function(n){return Math.abs(n.cx-(ft.a+ft.b*n.cy))});if(tbMedian(res)>0.03*pw)b=0;
+ var inc=0;for(i=1;i<N.length;i++){var dv=parseInt(N[i].raw,10)-parseInt(N[i-1].raw,10);if(dv>=1&&dv<=4)inc++}
+ if(inc<0.6*(N.length-1))return null;
+ /* 기울기 바로잡기: 번호 열이 기울어진 만큼 쪽 전체가 기울었다고 보고 좌표를 돌린다 */
+ T.forEach(function(o){o.px0=o.x0-b*o.cy;o.px1=o.x1-b*o.cy;o.pcx=o.cx-b*o.cy;o.pcy=o.cy+b*o.cx});
+ var NN=N.map(function(n){return T.filter(function(o){return o===n})[0]});
+ /* 2. 뜻 칸 시작 */
+ var nx=tbMedian(NN.map(function(n){return n.px0})),m0;
+ if(C)m0=C.m0-b*(tbMedian(NN.map(function(n){return n.cy})));
+ else{var ks=T.filter(function(o){return o.ko&&o.c>=40&&o.px0>nx+0.14*pw&&o.px0<nx+0.6*pw}).map(function(o){return o.px0}).sort(function(p,q){return p-q});m0=null;
+  for(i=0;i+2<ks.length;i++){if(ks[i+2]-ks[i]<0.03*pw){m0=ks[i];break}}
+  if(m0==null)return null}
+ var bandL=m0-0.025*pw,bandR=C?C.m1-b*(tbMedian(NN.map(function(n){return n.cy}))):maxX+10;
+ /* 3. 표제어 */
+ var heads=[],miss=[],LAT=function(o){return!o.ko&&/[A-Za-z]/.test(o.raw)};
+ NN.forEach(function(n){
+  var cand=T.filter(function(o){return o!==n&&LAT(o)&&o.c>=30&&!/^[\[\{]/.test(o.raw)&&o.px0>=n.px1-0.01*pw&&o.px0-n.px1<0.14*pw&&Math.abs(o.pcy-n.pcy)<0.7*Math.max(o.h,Hm)}).sort(function(p,q){return p.px0-q.px0});
+  if(!cand.length){miss.push({y0:n.y0-0.5*Hm,y1:n.y1+1.2*Hm});return}
+  var ch=[cand[0]],cu=cand[0],paren=false;
+  if(/^[\(\（]/.test(cu.raw)){miss.push({y0:n.y0-0.5*Hm,y1:n.y1+1.2*Hm});return}
+  for(;;){var nxt=T.filter(function(m){return m!==cu&&ch.indexOf(m)<0&&!m.ko&&m.c>=25&&Math.abs(m.pcy-cu.pcy)<0.6*Math.max(m.h,cu.h)&&m.px0>=cu.px1-3&&m.px0-cu.px1<2.2*Math.max(m.h,cu.h)&&m.px0<bandL&&(/[A-Za-z]/.test(m.raw)||/^[,'’]/.test(m.raw))}).sort(function(p,q){return p.px0-q.px0})[0];
+   if(!nxt)break;if(/^[\(\（\[]/.test(nxt.raw)){paren=true;break}ch.push(nxt);cu=nxt}
+  if(/\(/.test(ch[ch.length-1].raw))paren=true;
+  var hr=ch[0],tx0=ch.map(function(o){return o.raw}).join(" ");
+  if(!paren){var vs=T.filter(function(o){return!ch.some(function(q){return q===o})&&LAT(o)&&o.c>=35&&!/^[\[\{\(（]/.test(o.raw)&&!/[\]\}\)）]$/.test(o.raw)&&Math.abs(o.px0-hr.px0)<0.035*pw&&o.pcy>hr.pcy+0.8*hr.h&&o.pcy<hr.pcy+1.75*hr.h}).sort(function(p,q){return p.pcy-q.pcy||p.px0-q.px0});
+   if(vs.length){var vr=vs[0],row=T.filter(function(o){return LAT(o)&&Math.abs(o.pcy-vr.pcy)<0.5*Math.max(o.h,vr.h)&&o.px0>=vr.px0-3&&o.px0<bandL&&!/^[\[\{\(（]/.test(o.raw)}).sort(function(p,q){return p.px0-q.px0});
+    if(row.length&&row.length<=4){ch=ch.concat(row);tx0+=" "+row.map(function(o){return o.raw}).join(" ")}}}
+  var tx=tx0.replace(/[\(\)\[\]\{\}…]/g," ").replace(/\.{2,}/g," ").replace(/^[\s,.\-]+|[\s,.]+$/g,"").replace(/\s+/g," ").trim();
+  if(tx.replace(/[^A-Za-z]/g,"").length<2){miss.push({y0:n.y0-0.5*Hm,y1:n.y1+1.2*Hm});return}
+  heads.push({t:tx,y:n.pcy,oy:(ch[0].y0+ch[0].y1)/2,x0:ch[0].x0,x1:ch[ch.length-1].x1,px0:ch[0].px0,h:Math.max.apply(0,ch.map(function(o){return o.h})),c:Math.min.apply(0,ch.map(function(o){return o.c})),ay:n.pcy})});
+ if(heads.length<3||heads.length<0.5*NN.length)return null;
+ heads.sort(function(p,q){return p.y-q.y});
+ /* 4. 구역 나누기: 다음 표제어, 또는 크게 쓴 세 자리 번호(문장 상자) 앞에서 끊는다 */
+ var bnd=heads.map(function(h){return h.y-0.9*h.h});
+ T.forEach(function(o){if(/^\d{3}$/.test(o.raw)&&o.h>1.5*Hm&&o.px0<bandL)bnd.push(o.pcy-0.8*o.h)});
+ bnd.sort(function(p,q){return p-q});
+ var pitchs=[],allRows=[];
+ var entries=heads.map(function(hd,hi){
+  var top=hd.y-0.75*hd.h,bot=1e9;bnd.forEach(function(v){if(v>hd.y&&v<bot)bot=v});
+  var tk=T.filter(function(o){return o.pcx>=bandL&&o.pcx<=bandR&&o.pcy>=top&&o.pcy<bot&&!(o.raw===""||/^\d{4}$/.test(o.raw)&&o.px0<bandL)}).sort(function(p,q){return p.pcy-q.pcy});
+  var rows=[];tk.forEach(function(o){var r=rows[rows.length-1];if(r&&Math.abs(o.pcy-r.cy)<0.55*Math.max(o.h,r.h)){r.a.push(o);r.cy=(r.cy*(r.a.length-1)+o.pcy)/r.a.length;r.h=Math.max(r.h,o.h)}else rows.push({cy:o.pcy,h:o.h,a:[o]})});
+  rows.forEach(function(r){r.a.sort(function(p,q){return p.px0-q.px0});r.txt=r.a.map(function(o){return o.raw}).join(" ");r.x0=r.a[0].px0;r.c=r.a.reduce(function(s,o){return s+o.c},0)/r.a.length});
+  rows.slice(1).forEach(function(r,i){pitchs.push(r.cy-rows[i].cy)});
+  return{hd:hd,rows:rows}});
+ var pitch=tbMedian(pitchs.filter(function(d){return d>0.5*Hm}))||1.8*Hm;
+ var hmed=tbMedian([].concat.apply([],entries.map(function(e){return e.rows.map(function(r){return r.h})})))||Hm;
+ var rx=[].concat.apply([],entries.map(function(e){return e.rows.filter(function(r){return r.a.some(function(o){return o.ko})}).map(function(r){return r.x0})})).sort(function(p,q){return p-q}),flush=rx.length?rx[Math.floor(0.1*(rx.length-1))]:m0;
+ var out=entries.map(function(e){
+  var senses=[],cut=false,etyRow=null,cs=[],posSeen=false;
+  if(opt.debug)console.log('## '+e.hd.t+' pitch '+Math.round(pitch)+' hmed '+Math.round(hmed)+' m0 '+Math.round(m0)+' flush '+Math.round(flush));
+  e.rows.forEach(function(r){if(opt.debug)console.log('   '+(cut?'x':' ')+Math.round(r.cy)+' x'+Math.round(r.x0)+' h'+Math.round(r.h)+' c'+Math.round(r.c)+' | '+r.txt);if(cut)return;
+   var tk=r.a.map(function(o){return o.raw.replace(/^[\(\{\[\"'“‘]+|[\)\}\]\"'”’]+$/g,"")}),f=tk[0],hasKo=r.a.some(function(o){return o.ko}),txt=r.txt,ko1=r.a[0].ko;
+   var isP=function(t){return dkPos(t)},isC=function(t){return dkCirc(t)};
+   var ety=/어원/.test(txt)||/→|⟶/.test(txt)||/^[A-Za-z\-\(\)]+\([가-힣]/.test(r.a[0].raw);
+   if(ety){if(opt.debug)console.log('      ETY');etyRow=r;return}
+   if(etyRow&&r.cy-etyRow.cy<1.8*pitch&&!isP(f)&&!isC(f)&&hasKo&&/["”“'’]\s*$/.test(txt)){if(opt.debug)console.log('      ETYWRAP');etyRow=null;return}
+   etyRow=null;
+   var cp=txt.indexOf(")"),op=txt.indexOf("(");
+   if(cp>=0&&(op<0||cp<op)&&!r.a[0].ko&&/^[A-Za-z]/.test(f)){if(opt.debug)console.log('      PARENCONT');return}
+   if(/^[\(\（]\s*(↔|[A-Za-z]|<)/.test(txt))return;
+   if(r.a[0].px0>m0+0.3*pw){if(opt.debug)console.log('      FARRIGHT');return}
+   var pref=isP(f)||isC(f),der=false;
+   if(!r.a[0].ko&&/^[A-Za-z]{2,}/.test(f)&&!/^[\(\（\[]/.test(r.a[0].raw))der=true;
+   if(/^[◎©@®○●ⓞΟ]$/.test(f)||(/^[Oo0]$/.test(f)&&r.a.length>1))der=true;
+   if(/^[\-—–一ㅡ_~]+(\.{0,3}|…)?$/.test(f))der=true;
+   if(!der){for(var q=1;q<tk.length;q++){if(isP(tk[q])&&!isC(tk[q-1])){der=true;break}}}
+   if(!der&&isP(f)&&cs.length>=1)der=true;
+   if(der){if(opt.debug)console.log('      DER cut');cut=true;return}
+   var sx0=dkStripEn(r.a.map(function(o){return o.raw}).join(" ")),koLen=sx0.replace(/[^가-힣]/g,"").length,endsDot=/[가-힣\)\]]\s*[\.\?\!]\s*$/.test(txt);
+   if(!pref&&hasKo&&((cs.length>=1&&koLen>=16)||(cs.length===0&&/다\s*\.\s*$/.test(txt)&&koLen>=12)||(cs.length===0&&r.x0<=flush+0.008*pw&&koLen>=10))){if(opt.debug)console.log('      SENT cut');cut=true;return}
+   if(!hasKo)return;
+   if(isP(f))posSeen=true;
+   cs.push(r);
+   var toks=r.a.map(function(o){return o.raw}),k0=0;
+   while(k0<toks.length&&(isP(tk[k0])||isC(tk[k0])))k0++;
+   var sx=dkStripEn(toks.slice(k0).join(" "));
+   sx=dkBal(sx.replace(/["“”‘’`]/g,"")).replace(/^[\s,;:\.·•◎©"'“”‘’\)\]\}]+|[\s,;:·"'“”‘’\(\[\{]+$/g,"").replace(/[①-⑩❶-❿]/g,"").replace(/\s+/g," ").trim();
+   if(sx.replace(/[^가-힣]/g,"").length<1)return;
+   if(opt.debug)console.log('      SENSE -> '+sx);senses.push({s:sx,c:r.c})});
+  var hd=e.hd,raw=senses.map(function(q){return q.s}).join(" ; ");
+  return{en:hd.t,raw:raw,conf:senses.length?(senses.reduce(function(p,q){return p+q.c},0)/senses.length+hd.c)/2:hd.c,hc:hd.c,sub:false,y:hd.oy,x:hd.x0,h:hd.h}});
+ return{entries:out,meanPct:(m0-minX)/pw,mode:"table",dict:true,meta:{bandL:bandL,bandR:bandR,off:0,pitch:pitch,leftL:minX,hx:tbMedian(heads.map(function(h){return h.x0})),miss:miss}}}
+/*DICT-END*/
+
 
 var TESS_URL="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",ocrW=null,ocrLabel="";
 async function getOcr(){if(window.SRV&&SRV.on())return srvWorker();if(ocrW)return ocrW;
@@ -721,6 +835,8 @@ async function ocrPdfWords(buf){var w=await getOcr2();await loadScript(PDF_URL);
  return{pages:pages,rows:rows}}
 /*SRV-START*/
 var SRV={url:"",tok:"",use:false};try{var _s=JSON.parse(localStorage.getItem("wtm_srv")||"{}");SRV.url=_s.url||"";SRV.tok=_s.tok||"";SRV.use=!!_s.use}catch(e){}
+try{var _hm=/^#srv=([^&]*)&tok=(.*)$/.exec(location.hash||"");if(_hm){SRV.url=decodeURIComponent(_hm[1]);SRV.tok=decodeURIComponent(_hm[2]);SRV.use=true;localStorage.setItem("wtm_srv",JSON.stringify({url:SRV.url,tok:SRV.tok,use:true}));try{history.replaceState(null,"",location.pathname+location.search)}catch(e){}}}catch(e){}
+var ENG_SRV=false;
 SRV.on=function(){return SRV.use&&!!String(SRV.url).trim()};
 function srvSave(){try{localStorage.setItem("wtm_srv",JSON.stringify({url:SRV.url,tok:SRV.tok,use:SRV.use}))}catch(e){}}
 function srvBase(){return String(SRV.url).trim().replace(/\/+$/,"")}
@@ -739,6 +855,7 @@ function srvStatus(){var s=$("srvSt");if(s)s.textContent=SRV.on()?"· 사용 중
 (function(){var u=$("srvUrl"),t=$("srvTok"),c=$("srvUse");u.value=SRV.url;t.value=SRV.tok;c.checked=SRV.use;srvStatus();
  function sv(){SRV.url=u.value.trim();SRV.tok=t.value;SRV.use=c.checked;srvSave();srvStatus()}
  u.oninput=t.oninput=c.onchange=sv;
+ $("srvLink").onclick=function(){sv();var o=$("srvLinkOut"),m=$("srvMsg");if(!SRV.url||!SRV.tok){m.textContent="서버 주소와 비밀번호를 먼저 넣어 주세요.";return}var L=location.href.split("#")[0]+"#srv="+encodeURIComponent(SRV.url)+"&tok="+encodeURIComponent(SRV.tok);o.value=L;o.hidden=false;o.focus();o.select();try{navigator.clipboard.writeText(L).then(function(){m.textContent="링크를 복사했어요. 폰에서 이 링크를 열면 서버 설정이 자동으로 들어가요. (비밀번호가 들어 있으니 나만 아는 곳으로만 보내세요.)"},function(){m.textContent="아래 링크를 길게 눌러 복사해서 폰으로 보내세요. (비밀번호가 들어 있어요.)"})}catch(e){m.textContent="아래 링크를 복사해서 폰으로 보내세요. (비밀번호가 들어 있어요.)"}};
  $("srvTest").onclick=async function(){sv();var m=$("srvMsg");if(!SRV.url){m.textContent="서버 주소를 먼저 넣어 주세요.";return}m.textContent="연결 확인 중...";
   try{var r=await fetch(srvBase()+"/health",{headers:{"X-Token":SRV.tok}}),j=await r.json();m.textContent=j.ok?("연결됐어요 (엔진: "+j.engine+") · 비밀번호 "+(j.auth?"맞음":"안 맞음 — 서버의 OCR_TOKEN과 같게 넣어 주세요")):"서버가 응답했지만 상태가 이상해요."}
   catch(e){m.textContent="연결하지 못했어요. 파이가 켜져 있는지, 이 기기에서 Tailscale이 켜져 있는지, 주소가 맞는지 확인해 주세요."}}})();
@@ -799,6 +916,7 @@ function pageEval(w){var b=parseBest(w,null,true),q=w.filter(function(x){return 
 function cropCanvas(cv,x0,y0,x1,y1,sc){x0=Math.max(0,Math.round(x0));y0=Math.max(0,Math.round(y0));x1=Math.min(cv.width,Math.round(x1));y1=Math.min(cv.height,Math.round(y1));if(x1-x0<8||y1-y0<8)return null;sc=sc||1;
  var c=document.createElement("canvas");c.width=Math.round((x1-x0)*sc);c.height=Math.round((y1-y0)*sc);c.getContext("2d").drawImage(cv,x0,y0,x1-x0,y1-y0,0,0,c.width,c.height);c._ox=x0;c._oy=y0;c._sc=sc;return c}
 async function rescueMeans(w,words,cv,cols){
+ try{var dd0=parseDict(words.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols||null});if(dd0&&dd0.entries.length>=3)return words}catch(e){}
  function cp(arr){return(arr||words).map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}})}
  async function rec(c,psm){try{await w.setParameters({tessedit_pageseg_mode:String(psm),preserve_interword_spaces:"1"})}catch(e){}
   var r=await w.recognize(c);return ocrToWords(r.data).filter(function(x){return x.c>=45&&/[가-힣]/.test(x.t)}).map(function(x){return{t:x.t,x0:x.x0/(c._sc||1)+c._ox,y0:x.y0/(c._sc||1)+c._oy,x1:x.x1/(c._sc||1)+c._ox,y1:x.y1/(c._sc||1)+c._oy,c:x.c,ln:null}})}
@@ -843,7 +961,7 @@ async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11]
  if(best.q<8){var c2=rot180(cv),o3=await passes(c2,180);if(o3.q>=best.q+6||o3.sc>best.sc)best=o3}
  var b0=parseBest(best.words,null,true);if(b0)best.words=await rescueMeans(w,best.words,best.cv);
  return best}
-async function importOne2(f){var name=f.name.toLowerCase();
+async function importOne2(f){var name=f.name.toLowerCase();ENG_SRV=SRV.on();
  if(/\.(png|jpe?g|webp|bmp|gif|heic|heif)$/.test(name)){var cv=prepCanvas(await loadBitmap(f));ocrLabel=f.name;
   if($("colUse").checked&&BC===undefined){$("imsg").textContent="단어 칸과 뜻 칸을 사진 위에 그려 주세요.";BC=await askCols(cv)}
   var r=BC?await ocrCols(cv,BC):await ocrScan(cv,[3,6,11]);return{pages:[pgObj(r.words,f.name,{thumb:thumbOf(r.cv),ex:false,cols:r.cols||null})],rows:[]}}
@@ -915,7 +1033,7 @@ function addPairs(all){var m=$("imsg");
 function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").checked,items=[],pct=null,nv=0,nc=0,nt=0,ncol=0;
  RV.pages.forEach(function(pg){var b=parseBest(pg.w,RV.meanOv,strip,pg.cols?null:RV.force,pg.cols||null);if(!b)return;if(pg.cols)ncol++;
   if(b.m==="V"){nv++;if(pct==null)pct=b.r.meanPct}else if(b.m==="T")nt++;else nc++;
-  var ex=pg.ex!=null?pg.ex:cdExercise(pg.w);
+  var ex=b.dict?false:(pg.ex!=null?pg.ex:cdExercise(pg.w));
   b.fin.forEach(function(e){e.pg=pg.label;e.thumb=pg.thumb;e.ex=!!ex;items.push(e)})});
  var good=items.filter(function(e){return!e.sub&&e.ko}).length;RV.generic=false;RV.nv=nv;RV.nc=nc;RV.nt=nt;RV.ncol=ncol;
  if(good<2&&RV.rows.length){items=[];RV.generic=true;RV.rows.forEach(function(r){rowPairs(r).forEach(function(p){items.push({en:p.en,ko:p.ko,sub:false,warn:vWarn(p.en,p.ko,100)})})})}
@@ -925,7 +1043,7 @@ function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").che
 function renderRV(){var m=$("imsg");
  if(!RV.items.length){$("rv").hidden=true;m.textContent="단어와 뜻을 찾지 못했어요. 사진이 흐리거나 너무 비스듬하면 인식이 어려워요. 정면에서 밝게 다시 찍거나, 스캔본이면 단어가 있는 쪽을 골라 다시 읽어 보세요.";return}
  var n=RV.items.filter(function(e){return!e.sub}).length,sub=RV.items.length-n,wr=RV.items.filter(function(e){return e.warn.length}).length,ex=RV.items.filter(function(e){return e.ex}).length;
- $("rvinfo").textContent=(RV.ncol?"지정한 칸(영어 단어·한글 뜻)만 읽었어요. ":RV.generic?"표 형식으로 읽었어요. ":"쪽마다 알맞은 읽기 방식(표제어·뜻 목록"+(RV.nv?" "+RV.nv+"쪽":"")+" / 그림 카드"+(RV.nc?" "+RV.nc+"쪽":"")+" / 열 표"+(RV.nt?" "+RV.nt+"쪽":"")+")을 골랐어요. ")+"단어 "+n+"개"+(sub?", 파생어 "+sub+"개":"")+(wr?" · 확인이 필요한 줄 "+wr+"개":"")+(ex?" · 문제 쪽으로 보이는 줄 "+ex+"개는 선택을 꺼 뒀어요":"");
+ $("rvinfo").textContent=(RV.ncol?"지정한 칸(영어 단어·한글 뜻)만 읽었어요. ":RV.generic?"표 형식으로 읽었어요. ":"쪽마다 알맞은 읽기 방식(표제어·뜻 목록"+(RV.nv?" "+RV.nv+"쪽":"")+" / 그림 카드"+(RV.nc?" "+RV.nc+"쪽":"")+" / 열 표"+(RV.nt?" "+RV.nt+"쪽":"")+")을 골랐어요. ")+"단어 "+n+"개"+(sub?", 파생어 "+sub+"개":"")+(wr?" · 확인이 필요한 줄 "+wr+"개":"")+(ex?" · 문제 쪽으로 보이는 줄 "+ex+"개는 선택을 꺼 뒀어요":"")+(ENG_SRV?" · 내 서버(RapidOCR)로 읽었어요":" · ⚠ 이 기기 안의 기본 OCR로 읽었어요. 정확도가 낮으니 아래 '내 서버로 글자 읽기'를 켜 보세요");
  $("rvSlWrap").hidden=RV.generic||!RV.nv;$("rvSlv").textContent=$("rvSl").value+"%";
  var h='<tr><th></th><th>영어</th><th>뜻 (여러 개면 쉼표로)</th><th></th></tr>';
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'});
