@@ -680,6 +680,11 @@ function dkFit(P){var n=P.length,sx=0,sy=0,sxy=0,syy=0;P.forEach(function(p){sx+
 function parseDict(W,opt){opt=opt||{};var C=opt.cols||null;
  W=W.filter(function(w){return w.t&&String(w.t).trim()&&(w.c==null||w.c>=25)});if(W.length<30)return null;
  var T=W.map(function(w){var r=String(w.t).trim();return{raw:r,ko:vHan(r),x0:w.x0,x1:w.x1,y0:w.y0,y1:w.y1,cx:(w.x0+w.x1)/2,cy:(w.y0+w.y1)/2,h:w.y1-w.y0,c:w.c==null?100:w.c,ln:w.ln}});
+ var T2=[];T.forEach(function(o){var m=/^([1-9]\d{3})\d?([^\d][\s\S]*)?$/.exec(o.raw);
+  if(m&&o.raw.length>4&&!o.ko){var xm=o.x0+(o.x1-o.x0)*4/o.raw.length,rest=String(m[2]||"").replace(/^[\s,.\-●○•·]+/,"");
+   T2.push({raw:m[1],ko:false,x0:o.x0,x1:xm,y0:o.y0,y1:o.y1,cx:(o.x0+xm)/2,cy:o.cy,h:o.h,c:o.c,ln:o.ln});
+   if(rest)T2.push({raw:rest,ko:vHan(rest),x0:xm,x1:o.x1,y0:o.y0,y1:o.y1,cx:(xm+o.x1)/2,cy:o.cy,h:o.h,c:o.c,ln:o.ln})}
+  else T2.push(o)});T=T2;
  if(C){var sp=Math.max(1,C.m1-C.w0);T=T.filter(function(o){return o.cx>=C.w0-0.14*sp&&o.cx<=C.m1+0.03*sp})}
  if(T.length<25)return null;
  var minX=Math.min.apply(0,T.map(function(o){return o.x0})),maxX=Math.max.apply(0,T.map(function(o){return o.x1})),pw=Math.max(1,maxX-minX),Hm=tbMedian(T.map(function(o){return o.h}))||20;
@@ -1066,7 +1071,7 @@ function renderRV(){var m=$("imsg");
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'});
  $("rvt").innerHTML=h;$("rv").hidden=false}
 
-function diagFile(){if(!RV)return;var o={ver:13,ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:18,ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
 $("rvMode").onchange=function(){if(!RV)return;RV.force=this.value||null;runRV()};
@@ -1091,5 +1096,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v18 · 2026-10-24</div>
 </body>
 </html>
