@@ -343,7 +343,7 @@ function vSlopeFit(W,pw){var by={};W.forEach(function(w){if(w.ln!=null&&(w.c==nu
  function fit(Q){var my=vavg(Q.map(function(p){return p[0]})),ms=vavg(Q.map(function(p){return p[1]})),n=0,d=0;Q.forEach(function(p){n+=(p[0]-my)*(p[1]-ms);d+=(p[0]-my)*(p[0]-my)});var a=d>0?n/d:0;return[a,ms-a*my]}
  var f=fit(P);P=P.filter(function(p){return Math.abs(p[1]-(f[0]*p[0]+f[1]))<0.02});if(P.length>=3)f=fit(P);
  return function(y){return Math.max(-0.12,Math.min(0.12,f[0]*y+f[1]))}}
-function vEnTok(t,mc){var x=t.t;return t.c>=(mc||60)&&(/^(A|B|…|\.\.\.)$/.test(x)||(/^[A-Za-z\[\]'’\-.…\/]+$/.test(x)&&x.replace(/[^A-Za-z]/g,"").length>=2))}
+function vEnTok(t,mc){var x=t.t;return t.c>=(mc||60)&&(/^(A|B|…|~|\.\.\.)$/.test(x)||(/^[A-Za-z\[\]'’\-.…\/]+$/.test(x)&&x.replace(/[^A-Za-z]/g,"").length>=2))}
 function vFirstMean(tk){for(var i=0;i<tk.length;i++){var t=tk[i].t;
  if(vHan(t))return i;
  if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=3&&!/^[A-Z]{3}$/.test(t))return i;
@@ -356,14 +356,14 @@ function vCleanKo(s,strip){
  else s=s.replace(/[()（）]/g,"");
  return s.replace(/\s+/g," ").trim()}
 function vStripPos(s){s=s.trim();var m=s.match(/^([가-힣])\s+(?=\S)/);if(m){s=s.slice(m[0].length);var m2=s.match(/^[명동형부전접조대감구정속관]\s+(?=\S)/);if(m2)s=s.slice(m2[0].length)}
- return s.replace(/^[A-Za-z0-9\[\]|@®©&]{1,3}\s+/,"")}
+ return s.replace(/^[A-Za-z0-9\[\]|@®©&\u24D0-\u24E9\u24B6-\u24CF]{1,3}\s+/,"")}
 function vTidy(x){x=x.replace(/\s+[A-Za-z0-9\[\]|@®©&]{1,4}(?=\s|$)/g,"").replace(/^[A-Za-z0-9\[\]|@®©&]{1,3}\s+/,"");
  x=x.replace(/(^|\s)([가-힣])\s(?=[가-힣])/g,"$1$2").replace(/(^|\s)([가-힣])\s(?=[가-힣])/g,"$1$2");return x.trim()}
 function vSegs(s,strip){
- s=vCleanKo(s,strip).replace(/\s*(?:^|\s)[@®©]{1,2}(?=\s|$)/g," ; ");
+ s=vCleanKo(s,strip).replace(/[\u24D0-\u24E9\u24B6-\u24CF]/g," ; ").replace(/(^|\s)[@®©]{1,2}(?=\s|$)/g," ; ").replace(/(^|\s)\d{1,2}[.)]\s+/g," ; ").replace(/([가-힣])\.\s+(?=[가-힣~])/g,"$1, ");
  var seg=splitMeanings(s).map(vTidy).map(function(x){return x.replace(/^[\s\d.;:\-~]+|[\s;:,.\-]+$/g,"").trim()}).filter(function(x){return vHan(x)&&x.length>=1});
  var seen={};return seg.filter(function(x){if(seen[x])return false;seen[x]=1;return true})}
-function vWarn(en,ko,conf){var w=[];
+function vWarn(en,ko,conf,hc){var w=[];if(hc!=null&&hc<65)w.push("영어 확인");
  if(!/^[A-Za-z][A-Za-z\s'’\-\/.,\[\]()]*[A-Za-z.\])]$/.test(en)&&!/^[A-Za-z]$/.test(en))w.push("영어");
  if(!ko)w.push("뜻 없음");else{
   if(/[A-Za-z0-9]/.test(ko.replace(/\b[AB]\b/g,"")))w.push("뜻에 영문·숫자");
@@ -372,24 +372,21 @@ function vWarn(en,ko,conf){var w=[];
   if(ko.replace(/[…~\s,]/g,"").length<=2)w.push("뜻이 너무 짧음")}
  if(conf<55)w.push("인식 불확실");
  return w}
-function parseVoca(W,opt){opt=opt||{};
- W=W.filter(function(w){return w.t&&(w.c==null||w.c>=30)});if(W.length<8)return null;
- var minX=Math.min.apply(0,W.map(function(w){return w.x0})),maxX=Math.max.apply(0,W.map(function(w){return w.x1})),pw=Math.max(1,maxX-minX);
- var H=vmed(W.map(function(w){return w.y1-w.y0}))||20;
- var lines=[];
- W.forEach(function(w){w.y=(w.y0+w.y1)/2});
- var sf=vSlopeFit(W,pw);
- W.forEach(function(w){w.yy=w.y-sf(w.y)*((w.x0+w.x1)/2-minX)});
- W.sort(function(a,b){return a.yy-b.yy});
- W.forEach(function(w){var l=lines[lines.length-1];if(l&&Math.abs(w.yy-l.y)<0.5*H){l.w.push(w);l.y=(l.y*(l.w.length-1)+w.yy)/l.w.length}else lines.push({y:w.yy,w:[w]})});
- lines.forEach(function(l){l.w.forEach(function(w){w.y=l.y})});
+function vLines(W,mode,H,pw,minX){var lines=[];
+ if(mode==="ln"){var by={};W.forEach(function(w){(by[w.ln]=by[w.ln]||[]).push(w)});
+  Object.keys(by).forEach(function(k){var a=by[k].slice().sort(function(p,q){return p.x0-q.x0});lines.push({y:vmed(a.slice(0,2).map(function(w){return w.y})),w:a})})}
+ else{var sf=vSlopeFit(W,pw),S=W.map(function(w){return{w:w,yy:w.y-sf(w.y)*((w.x0+w.x1)/2-minX)}}).sort(function(a,b){return a.yy-b.yy});
+  S.forEach(function(o){var l=lines[lines.length-1];if(l&&Math.abs(o.yy-l.y)<0.5*H){l.w.push(o.w);l.y=(l.y*(l.w.length-1)+o.yy)/l.w.length}else lines.push({y:o.yy,w:[o.w]})})}
+ lines.sort(function(a,b){return a.y-b.y});return lines}
+function vOk(t){return t.c>=(vHan(t.t)?50:60)}
+function vCore(lines,H,pw,minX,opt){
  lines.forEach(function(l){l.tk=vTokens(l.w,H);l.fl=-1;
-  for(var i=0;i<l.tk.length;i++){var t=l.tk[i].t;if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=2&&!/^[A-Z]{3}$/.test(t)){l.fl=i;break}if(vHan(t)||/^\[/.test(t))break}
+  for(var i=0;i<l.tk.length;i++){var t=l.tk[i].t;if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=2&&!/^[A-Z]{3}$/.test(t)&&l.tk[i].c>=60){l.fl=i;break}if(vHan(t)||/^\[/.test(t))break}
   l.num=l.tk.some(function(t,i){return /^\d{3,5}$/.test(t.t)&&(l.fl<0||i<l.fl)})});
  var xsN=lines.filter(function(l){return l.fl>=0&&l.num}).map(function(l){return l.tk[l.fl].x0}),
   xsA=lines.filter(function(l){return l.fl>=0}).map(function(l){return l.tk[l.fl].x0}).sort(function(a,b){return a-b});
- var hx=xsN.length>=3?vmed(xsN):xsA[Math.floor(xsA.length*0.2)],tolX=0.06*pw;
- var heads=[],prev=null;
+ if(!xsA.length)return null;
+ var hx=xsN.length>=3?vmed(xsN):xsA[Math.floor(xsA.length*0.2)],tolX=0.06*pw,heads=[],prev=null;
  lines.forEach(function(l,li){
   if(l.fl<0||Math.abs(l.tk[l.fl].x0-hx)>tolX)return;
   var tk=l.tk,gs=l.fl,ge=gs;
@@ -399,38 +396,47 @@ function parseVoca(W,opt){opt=opt||{};
    var okc=grp.length&&grp.every(function(t){return t.c>=60&&vLat(t.t)||/^(A|B|do|to|of|oneself|one's|sb|sth)$/i.test(t.t)})&&ge===tk.length-1||(grp.length&&grp.every(function(t){return t.c>=60})&&tk.slice(ge+1).every(function(t){return t.x0>=hx+0.25*pw}));
    if(okc&&!/^\[/.test(tk[gs].t)){prev.en+=" "+vJoin(grp.map(function(t){return t.t}));prev.gx1=Math.max(prev.gx1,grp[grp.length-1].x1)}
    return}
-  var h={en:vJoin(grp.map(function(t){return t.t})),line:l,li:li,gx1:grp[grp.length-1].x1,rest:tk.slice(ge+1),conf:vavg(grp.map(function(t){return t.c}))};
+  var h={en:vJoin(grp.map(function(t){return t.t})),line:l,li:li,gx1:grp[grp.length-1].x1,rest:tk.slice(ge+1),conf:vavg(grp.map(function(t){return t.c})),hc:Math.min.apply(0,grp.map(function(t){return t.c}))};
   heads.push(h);prev=h});
  if(heads.length<2)return null;
- var firsts=heads.map(function(h){return h.rest.filter(function(t){return t.x0>h.gx1+0.5*H&&/[가-힣A-Za-z(@®©]/.test(t.t)})[0]}).filter(Boolean).map(function(t){return t.x0});
- var meanX=opt.meanX!=null?minX+opt.meanX*pw:(firsts.length?vmed(firsts)-0.025*pw:hx+0.3*pw);
- var etym=function(s){return /[+→]|어원/.test(s)},entries=[];
- heads.forEach(function(h,hi){
-  var next=heads[hi+1],end=next?next.li:lines.length,meaning=[],derived=[],stopped=false,
-   rt=h.rest.filter(function(t){return t.x0>=meanX-0.04*pw});
-  var s0=vJoin(rt.map(function(t){return t.t})),conf=[h.conf];
-  if(s0&&!etym(s0)){meaning.push(s0);rt.forEach(function(t){conf.push(t.c)})}
-  for(var j=h.li+1;j<end&&!stopped;j++){var L=lines[j],r=L.tk.filter(function(t){return t.x0>=meanX-0.04*pw});if(!r.length)continue;
-   var txt=vJoin(r.map(function(t){return t.t}));
-   if(etym(txt)||r.some(function(t){return /^point$/i.test(t.t)}))continue;
-   var mi=vFirstMean(r);if(mi<0)continue;var first=r[mi].t;
-   if(vHan(first)&&!(/[가-힣]다\.?$/.test(txt)&&r.length>=6)){meaning.push(vJoin(r.slice(mi).map(function(t){return t.t})));r.forEach(function(t){conf.push(t.c)});continue}
-   if(vLat(first)&&first.replace(/[^A-Za-z]/g,"").length>=3){
-    stopped=true;
+ var firsts=heads.map(function(h){return h.rest.filter(function(t){return t.x0>h.gx1+0.5*H&&vOk(t)&&/[가-힣A-Za-z(@®©ⓐ-ⓩ]/.test(t.t)})[0]}).filter(Boolean).map(function(t){return t.x0});
+ var meanX=opt.meanX!=null?minX+opt.meanX*pw:(firsts.length?vmed(firsts)-0.025*pw:hx+0.3*pw),rz=meanX-0.04*pw;
+ var etym=function(s){return /[+→]|어원/.test(s)},own={},sp=vmed(heads.slice(1).map(function(h,i){return h.line.y-heads[i].line.y}))||4*H;
+ heads.forEach(function(h){h.items=[];own[h.li]=1});
+ lines.forEach(function(L,li){if(own[li])return;var r=L.tk.filter(function(t){return t.x0>=rz&&vOk(t)});if(!r.length)return;
+  var best=-1,bd=1e9;
+  if(opt.assign==="seq"){heads.forEach(function(h,i){if(h.line.y<=L.y)best=i});bd=0}
+  else heads.forEach(function(h,i){var d=Math.abs(L.y-h.line.y);if(d<bd){bd=d;best=i}});
+  if(best>=0&&bd<=Math.max(1.2*sp,3*H))heads[best].items.push({y:L.y,r:r,own:false})});
+ var entries=[];
+ heads.forEach(function(h){
+  h.items.push({y:h.line.y,r:h.rest.filter(function(t){return t.x0>=rz&&vOk(t)}),own:true});h.items.sort(function(a,b){return a.y-b.y});
+  var meaning=[],derived=[],phase=0,conf=[h.conf];
+  h.items.forEach(function(it){var r=it.r;if(!r.length)return;var txt=vJoin(r.map(function(t){return t.t}));
+   if(etym(txt)||r.some(function(t){return /^point$/i.test(t.t)}))return;
+   if(it.own){if(phase===0){meaning.push(txt);r.forEach(function(t){conf.push(t.c)})}return}
+   var mi=vFirstMean(r);if(mi<0)return;var first=r[mi].t;
+   if(vHan(first)&&phase===0&&!(/[가-힣]다\.?$/.test(txt)&&r.length>=6)){meaning.push(vJoin(r.slice(mi).map(function(t){return t.t})));r.forEach(function(t){conf.push(t.c)});return}
+   if(vLat(first)&&first.replace(/[^A-Za-z]/g,"").length>=3){phase=1;
     var k=mi,en=[];while(k<r.length&&vEnTok(r[k],35)){en.push(r[k].t);k++}
-    var kr=vJoin(r.slice(k).map(function(t){return t.t}));kr=vStripPos(kr);
-    derived.push({en:vJoin(en).replace(/[….]+$/,""),raw:kr,conf:vavg(r.map(function(t){return t.c}))});
-    // 같은 표제어의 뒤쪽 파생어 줄들도 수집
-    for(var m=j+1;m<end;m++){var L2=lines[m],r2=L2.tk.filter(function(t){return t.x0>=meanX-0.04*pw});if(!r2.length)continue;var i2=vFirstMean(r2);if(i2<0)continue;var f2=r2[i2].t;
-     if(vLat(f2)&&f2.replace(/[^A-Za-z]/g,"").length>=3){var k2=i2,en2=[];while(k2<r2.length&&vEnTok(r2[k2],35)){en2.push(r2[k2].t);k2++}
-      var kr2=vJoin(r2.slice(k2).map(function(t){return t.t}));kr2=vStripPos(kr2);
-      if(vHan(kr2))derived.push({en:vJoin(en2).replace(/[….]+$/,""),raw:kr2,conf:vavg(r2.map(function(t){return t.c}))})}}
-   }else stopped=true}
+    var kr=vStripPos(vJoin(r.slice(k).map(function(t){return t.t})));
+    if(en.length&&vHan(kr))derived.push({en:vJoin(en).replace(/[….]+$/,""),raw:kr,conf:vavg(r.map(function(t){return t.c})),hc:vavg(en.map(function(_,i){return r[mi+i].c}))})}
+   else if(phase===0)phase=1});
   var enC=h.en.replace(/[….]+$/,"").replace(/\s+/g," ").trim(),rawKo=vStripPos(meaning.join(" ")).replace(/\s[명동형부전접조대감구정속관]\s/g," ; ");
-  entries.push({en:enC,raw:rawKo,conf:vavg(conf),sub:false});
-  derived.forEach(function(d){entries.push({en:d.en,raw:d.raw,conf:d.conf,sub:true})})});
+  entries.push({en:enC,raw:rawKo,conf:vavg(conf),hc:h.hc,sub:false});
+  derived.forEach(function(d){entries.push({en:d.en,raw:d.raw,conf:d.conf,hc:d.hc,sub:true})})});
  return {entries:entries,meanPct:(meanX-minX)/pw}}
-function vaFinish(res,strip){return res.entries.map(function(e){var seg=vSegs(e.raw,strip),ko=seg.join(", ");return{en:e.en,ko:ko,sub:e.sub,warn:vWarn(e.en,ko,e.conf)}})}
+function parseVoca(W,opt){opt=opt||{};
+ W=W.filter(function(w){return w.t&&(w.c==null||w.c>=30)});if(W.length<8)return null;
+ var minX=Math.min.apply(0,W.map(function(w){return w.x0})),maxX=Math.max.apply(0,W.map(function(w){return w.x1})),pw=Math.max(1,maxX-minX);
+ var H=vmed(W.map(function(w){return w.y1-w.y0}))||20;W.forEach(function(w){w.y=(w.y0+w.y1)/2});
+ var modes=W.filter(function(w){return w.ln!=null}).length>W.length*0.9?["ln","cl"]:["cl"],best=null;
+ var combos=[];modes.forEach(function(m){["seq","near"].forEach(function(a){combos.push([m,a])})});
+ combos.forEach(function(cb){var m=cb[0],r=null;try{r=vCore(vLines(W,m,H,pw,minX),H,pw,minX,{meanX:opt.meanX,assign:cb[1]})}catch(e){}if(!r)return;
+  var fin=vaFinish(r,true),sc=fin.filter(function(e){return!e.sub&&e.ko&&!e.warn.length}).length*3+fin.filter(function(e){return!e.sub&&e.ko}).length;
+  if(!best||sc>best.sc){best=r;best.sc=sc;best.mode=cb.join("+")}});
+ return best}
+function vaFinish(res,strip){return res.entries.map(function(e){var seg=vSegs(e.raw,strip),ko=seg.join(", ");return{en:e.en,ko:ko,sub:e.sub,warn:vWarn(e.en,ko,e.conf,e.hc)}})}
 /*VOCA-END*/
 
 var TESS_URL="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",ocrW=null,ocrLabel="";
