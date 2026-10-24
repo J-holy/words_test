@@ -108,6 +108,7 @@ tr.w td{height:38px}
 <div id="rv" class="card" hidden style="margin-top:10px">
 <h2>불러온 단어 확인</h2>
 <div class="mute" id="rvinfo"></div>
+<div class="mute" style="margin:2px 0"><button type="button" class="btn" id="rvDiag">인식 결과 파일 받기 (잘못 읽혔을 때 개발자에게 보내는 용도)</button></div>
 <div class="row"><label><input type="checkbox" id="rvStrip" checked> 괄호·대괄호 안 설명 빼기</label><label><input type="checkbox" id="rvSub"> 파생어(NEW·◎)도 후보에 넣기</label></div>
 <div class="row"><span class="mute">읽기 방식</span><select id="rvMode" class="rvsel"><option value="">자동으로 고르기</option><option value="V">목록형 (단어 왼쪽, 뜻 오른쪽·아래)</option><option value="C">그림 카드형 (단어 옆·아래에 뜻)</option><option value="T">열 표형 (번호·단어 | 뜻 | 예문)</option></select></div>
 <div class="row" id="rvSlWrap"><span class="mute">뜻이 시작되는 위치</span><input type="range" id="rvSl" min="10" max="70" value="30" style="flex:1;min-width:140px"><span class="mute" id="rvSlv"></span></div>
@@ -607,7 +608,7 @@ function parseTable(W,opt){opt=opt||{};
    ch.forEach(function(c){c._u=1});
    var tx=ch.map(function(c){return String(c.t).replace(/[.…·]+$/,"")}).join(" ").trim();
    if(!/^[A-Za-z][A-Za-z'’\- ]*$/.test(tx)||tx.replace(/[^A-Za-z]/g,"").length<3)return;
-   left.push({t:tx,raw:tx,ko:false,x0:ch[0].x0,x1:ch[ch.length-1].x1,y0:Math.min.apply(0,ch.map(function(c){return c.y0})),y1:Math.max.apply(0,ch.map(function(c){return c.y1})),cy:(ch[0].cy),h:Math.max.apply(0,ch.map(function(c){return c.h})),c:Math.min.apply(0,ch.map(function(c){return c.c})),ln:ch[0].ln})})
+   left.push({t:tx,raw:ch.map(function(c){return String(c.raw).trim()}).join(" "),ko:false,x0:ch[0].x0,x1:ch[ch.length-1].x1,y0:Math.min.apply(0,ch.map(function(c){return c.y0})),y1:Math.max.apply(0,ch.map(function(c){return c.y1})),cy:(ch[0].cy),h:Math.max.apply(0,ch.map(function(c){return c.h})),c:Math.min.apply(0,ch.map(function(c){return c.c})),ln:ch[0].ln})})
  }else left=T.filter(function(o){return!o.ko&&Math.abs(o.x0-hx)<=tolX*1.6&&/^[A-Za-z][A-Za-z'’\-]*$/.test(o.t)&&o.c>=45&&o.t.replace(/[^A-Za-z]/g,"").length>=3});var heads=[],subs=[],POS=/^(n|v|a|ad|adj|adv|prep|conj|pron|int|num|vi|vt)[.,;:)]*$|^\d{1,2}[.,]$/i;
  left.forEach(function(o){
   if(/^[\[\{\(]|[\]\}\)]$|[^\x00-\x7F]/.test(String(o.raw).trim()))return;
@@ -631,9 +632,9 @@ function parseTable(W,opt){opt=opt||{};
  heads=heads.filter(function(h,i){return i===0||h.cy-heads[i-1].cy>0.45*pitch||h.h>heads[i-1].h});
  /* 4. Korean segments in the middle band */
  var mid=W.filter(function(w){var xc=C?(w.x0+w.x1)/2:w.x0;return xc>=bandL&&xc<bandR});
- var allSg=cdSegs(mid,H),segs=allSg.filter(function(s){return s.k==="k"&&s.c>=40&&!/^[은는을를]/.test(s.t)});
+ var allSg=cdSegs(mid,H),segs=allSg.filter(function(s){return s.k==="k"&&s.c>=(C?25:40)&&!/^[은는을를]/.test(s.t)});
  if(C){segs=segs.filter(function(q){return!allSg.some(function(e){return e.k==="e"&&e.x1<=q.x0+0.2*q.h&&Math.abs(e.cy-q.cy)<0.5*Math.max(e.h,q.h)&&/[A-Za-z]{2,}/.test(e.t)})});
-  segs.forEach(function(q){q.t=q.t.replace(/^[명동형부전접대감조]\s+/,"").replace(/\s*[\(\（\[〔{][A-Za-z].*$/,"").trim()});segs=segs.filter(function(q){return/[가-힣]/.test(q.t)&&!/^[명동형부전접대감조]$/.test(q.t)})}
+  segs.forEach(function(q){q.t=q.t.replace(/^[명동형부전접대감조통혐]\s+/,"").replace(/\s*[\(\（\[〔{][A-Za-z].*$/,"").trim()});segs=segs.filter(function(q){return/[가-힣]/.test(q.t)&&!/^[명동형부전접대감조통혐정]$/.test(q.t)})}
  if(C&&segs.length>5){var mhh=tbMedian(segs.map(function(q){return q.h}));segs=segs.filter(function(q){return q.h<=1.3*mhh})}
  var dys=[];heads.forEach(function(h){var b=null,bd=1e9;segs.forEach(function(s){var d=s.cy-h.cy;if(Math.abs(d)<bd){bd=Math.abs(d);b=d}});if(b!=null&&bd<0.5*pitch)dys.push(b)});
  if(dys.length<Math.max(C?2:3,0.5*heads.length))return null;
@@ -929,6 +930,10 @@ function renderRV(){var m=$("imsg");
  var h='<tr><th></th><th>영어</th><th>뜻 (여러 개면 쉼표로)</th><th></th></tr>';
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'});
  $("rvt").innerHTML=h;$("rv").hidden=false}
+
+function diagFile(){if(!RV)return;var o={ver:13,ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+ var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
+if($("rvDiag"))$("rvDiag").onclick=diagFile;
 $("rvMode").onchange=function(){if(!RV)return;RV.force=this.value||null;runRV()};
 $("rvStrip").onchange=runRV;$("rvSub").onchange=runRV;
 $("rvSl").oninput=function(){if(!RV)return;RV.meanOv=this.value/100;runRV()};
