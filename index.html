@@ -52,6 +52,8 @@ body.solving .ui,body.solving #out{display:none!important}
 #ans{flex:1;min-width:160px;font-size:18px}
 .rvt{width:100%;border-collapse:collapse;margin-top:8px}.rvt td,.rvt th{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left;vertical-align:middle;font-size:14px}.rvt th{color:var(--mute);font-weight:400}
 .rvt input[type=text]{padding:6px 8px;font-size:14px;min-width:90px}.rvt tr.wr td{background:rgba(180,83,9,.12)}.tag{font-size:11px;color:var(--warn)}em{font-style:normal;font-size:11px;color:#666;border:1px solid #bbb;border-radius:4px;padding:0 4px;margin-left:6px}
+.crw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:#fff;line-height:0}.crc{display:block;max-width:none}
+.crow td{padding-top:0}
 .pkg{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;max-height:360px;overflow:auto;margin-top:8px;padding:2px}
 .th{border:2px solid var(--line);border-radius:8px;padding:3px;text-align:center;cursor:pointer;font-size:12px;color:var(--mute);user-select:none}
 .th canvas{width:100%;display:block;border-radius:4px;background:#eee}
@@ -109,6 +111,7 @@ tr.w td{height:38px}
 <div id="rv" class="card" hidden style="margin-top:10px">
 <h2>불러온 단어 확인</h2>
 <div class="mute" id="rvinfo"></div>
+<div class="row" style="margin:4px 0"><label><input type="checkbox" id="rvCrop" checked> 줄마다 원본 글자 보기 (읽은 결과를 사진과 바로 맞춰 볼 수 있어요)</label></div>
 <div class="mute" style="margin:2px 0"><button type="button" class="btn" id="rvDiag">인식 결과 파일 받기 (잘못 읽혔을 때 개발자에게 보내는 용도)</button></div>
 <div class="row"><label><input type="checkbox" id="rvStrip" checked> 괄호·대괄호 안 설명 빼기</label><label><input type="checkbox" id="rvSub"> 파생어(NEW·◎)도 후보에 넣기</label></div>
 <div class="row"><span class="mute">읽기 방식</span><select id="rvMode" class="rvsel"><option value="">자동으로 고르기</option><option value="V">목록형 (단어 왼쪽, 뜻 오른쪽·아래)</option><option value="C">그림 카드형 (단어 옆·아래에 뜻)</option><option value="T">열 표형 (번호·단어 | 뜻 | 예문)</option></select></div>
@@ -563,7 +566,7 @@ function cdSane(fin){fin.forEach(function(e){if(e.ko){e.ko=e.ko.replace(/^(명�
 function scoreFin(fin){var n=fin.filter(function(e){return!e.sub}).length,cl=fin.filter(function(e){return!e.sub&&e.ko&&!e.warn.length}).length;return cl*3+fin.filter(function(e){return!e.sub&&e.ko}).length-(n-cl)}
 function parseBest(w,meanOv,strip,force,cols){var c=[];
  if(!force){try{var dm=parseDict(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols||null});
-  if(dm&&dm.entries.length>=3){var fd=vaFinish(dm,strip),gd=fd.filter(function(e){return e.ko&&e.ko.replace(/[^가-힣]/g,"").length>=2}).length;
+  if(dm&&dm.entries.length>=3){var fd=vaFinish(dm,strip);fd.forEach(function(f,i){var e=dm.entries[i];if(e){f.crop=e.crop;f.cb=e.cb}});var gd=fd.filter(function(e){return e.ko&&e.ko.replace(/[^가-힣]/g,"").length>=2}).length;
    if(gd>=0.4*fd.length&&gd>=2)return{m:"T",r:dm,fin:fd,sc:scoreFin(fd)+3000,dict:true}}}catch(e){}}
  if(cols){try{var tc=parseTable(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols});if(tc){var fc=cdSane(vaFinish(tc,strip));return{m:"T",r:tc,fin:fc,sc:scoreFin(fc)}}}catch(e){}return null}
  function cp(){return w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}})}
@@ -776,8 +779,9 @@ function parseDict(W,opt){opt=opt||{};var C=opt.cols||null;
    sx=dkBal(sx.replace(/["“”‘’`]/g,"")).replace(/^[\s,;:\.·•◎©"'“”‘’\)\]\}]+|[\s,;:·"'“”‘’\(\[\{]+$/g,"").replace(/[①-⑩❶-❿]/g,"").replace(/\s+/g," ").trim();
    if(sx.replace(/[^가-힣]/g,"").length<1)return;
    if(opt.debug)console.log('      SENSE -> '+sx);senses.push({s:sx,c:r.c})});
+  var lastCy=cs.length?cs[cs.length-1].cy:e.hd.y+1.2*pitch,crop={x0:nx-0.02*pw,xl:bandL,x1:bandR,y0:e.hd.y-0.95*e.hd.h,yh:e.hd.y+1.7*e.hd.h,y1:Math.max(lastCy+0.85*Math.max(hmed,e.hd.h*0.8),e.hd.y+1.7*e.hd.h)};
   var hd=e.hd,raw=senses.map(function(q){return q.s}).join(" ; ");
-  return{en:hd.t,raw:raw,conf:senses.length?(senses.reduce(function(p,q){return p+q.c},0)/senses.length+hd.c)/2:hd.c,hc:hd.c,sub:false,y:hd.oy,x:hd.x0,h:hd.h}});
+  return{en:hd.t,raw:raw,conf:senses.length?(senses.reduce(function(p,q){return p+q.c},0)/senses.length+hd.c)/2:hd.c,hc:hd.c,sub:false,y:hd.oy,x:hd.x0,h:hd.h,crop:crop,cb:b}});
  return{entries:out,meanPct:(m0-minX)/pw,mode:"table",dict:true,meta:{bandL:bandL,bandR:bandR,off:0,pitch:pitch,leftL:minX,hx:tbMedian(heads.map(function(h){return h.x0})),miss:miss,b:b,numL:Math.min.apply(0,NN.map(function(n){return n.x0})),bandLp:bandL,bandRp:bandR}}}
 /*DICT-END*/
 
@@ -911,6 +915,19 @@ async function ocrCols(cv,F){var w=await getOcr(),px=colsPx(F,cv),W=cv.width,H=c
  return{words:best.words,cv:cv,rot:0,cols:px,sc:best.sc}}
 /*COLS-END*/
 
+var _vaF0=vaFinish;vaFinish=function(res,strip){var f=_vaF0(res,strip);f.forEach(function(x,i){var e=res.entries[i];if(e){x.ey=e.y;x.eh=e.h;x.ex=e.x;if(e.crop){x.crop=e.crop;x.cb=e.cb}}});return f};
+function bigOf(cv){try{var s=Math.min(1,2200/cv.width),c=document.createElement("canvas");c.width=Math.round(cv.width*s);c.height=Math.round(cv.height*s);c.getContext("2d").drawImage(cv,0,0,c.width,c.height);return{big:c.toDataURL("image/jpeg",0.7),bigSc:s,cw:cv.width,ch:cv.height}}catch(e){return{}}}
+function cropRect(e,pg,part){var c=e.crop;
+ if(c)return part==="m"?{x0:c.xl-0.012*(c.x1-c.x0),x1:c.x1,y0:c.y0,y1:c.y1,b:e.cb||0}:{x0:c.x0,x1:c.xl,y0:c.y0,y1:c.yh,b:e.cb||0};
+ if(part==="m"||e.ey==null||!pg||!pg.cw)return null;var h=e.eh||30;return{x0:0.03*pg.cw,x1:0.97*pg.cw,y0:e.ey-1.3*h,y1:e.ey+2.2*h,b:0}}
+function drawCrop(cnv,e,pg,part){var r=cropRect(e,pg,part);if(!r||!pg||!pg.big)return false;
+ var im=pg._im;if(!im){im=pg._im=new Image();im.src=pg.big}
+ var go=function(){var s=pg.bigSc||1,w=Math.max(8,Math.round((r.x1-r.x0)*s)),h=Math.max(8,Math.round((r.y1-r.y0)*s)),k=1;if(w>1500){k=1500/w;w=1500;h=Math.max(8,Math.round(h*k))}
+  cnv.width=w;cnv.height=h;var g=cnv.getContext("2d");g.setTransform(1,0,0,1,0,0);g.fillStyle="#fff";g.fillRect(0,0,w,h);
+  try{g.setTransform(k,k*r.b,-k*r.b,k,-k*s*r.x0,-k*s*r.y0);g.drawImage(im,0,0)}catch(x){}
+  g.setTransform(1,0,0,1,0,0);cnv.style.width=Math.round(w*0.45)+"px";cnv.hidden=false;if(cnv.parentNode)cnv.parentNode.hidden=false};
+ if(im.complete&&im.naturalWidth)go();else im.addEventListener("load",go);return true}
+function fillCrops(){var q=document.querySelectorAll("#rvt canvas.crc");for(var i=0;i<q.length;i++){var c=q[i],e=RV.items[+c.getAttribute("data-i")];if(!e||!e.pgref)continue;var part=c.getAttribute("data-p")||"h";if(!drawCrop(c,e,e.pgref,part)){var w=c.parentNode;if(w)w.hidden=true}}}
 function pgObj(w,label,extra){var o={w:w,label:label};if(extra)for(var k in extra)o[k]=extra[k];return o}
 async function openPdf(buf){await loadScript(PDF_URL);var lib=window.pdfjsLib;lib.GlobalWorkerOptions.workerSrc=PDF_WORKER;return lib.getDocument({data:new Uint8Array(buf.slice(0))}).promise}
 async function pdfHasText(buf){var doc=await openPdf(buf),n=Math.min(doc.numPages,6);
@@ -986,7 +1003,7 @@ async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11]
 async function importOne2(f){var name=f.name.toLowerCase();ENG_SRV=SRV.on();
  if(/\.(png|jpe?g|webp|bmp|gif|heic|heif)$/.test(name)){var cv=prepCanvas(await loadBitmap(f));ocrLabel=f.name;
   if($("colUse").checked&&BC===undefined){$("imsg").textContent="단어 칸과 뜻 칸을 사진 위에 그려 주세요.";BC=await askCols(cv)}
-  var r=BC?await ocrCols(cv,BC):await ocrScan(cv,[3,6,11]);return{pages:[pgObj(r.words,f.name,{thumb:thumbOf(r.cv),ex:false,cols:r.cols||null})],rows:[]}}
+  var r=BC?await ocrCols(cv,BC):await ocrScan(cv,[3,6,11]);return{pages:[pgObj(r.words,f.name,Object.assign({thumb:thumbOf(r.cv),ex:false,cols:r.cols||null},bigOf(r.cv)))],rows:[]}}
  if(/\.pdf$/.test(name)){var buf=await f.arrayBuffer();
   if(await pdfHasText(buf)){var pg=await readPdfWords(buf);return{pages:pg.map(function(a,i){return pgObj(a,f.name.replace(/\.pdf$/i,"")+" p."+(i+1))}).filter(function(o){return o.w.length>8}),rows:await readPdf(buf)}}
   return{scan:{name:f.name,buf:buf}}}
@@ -1040,7 +1057,7 @@ $("pkGo").onclick=async function(){if(!PK||PK.busy)return;var ps=parseRange($("p
    var pg=await P.doc.getPage(p),b=pg.getViewport({scale:1}),sc=Math.max(1,Math.min(5,2800/Math.max(b.width,b.height))),vp=pg.getViewport({scale:sc}),cv=document.createElement("canvas");
    cv.width=Math.round(vp.width);cv.height=Math.round(vp.height);await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
    var pc=prepCanvas(cv,2800);if($("colUse").checked&&BC===undefined){m.textContent="단어 칸과 뜻 칸을 쪽 위에 그려 주세요.";BC=await askCols(pc)}
-   var r=BC?await ocrCols(pc,BC):await ocrScan(pc);got.push(pgObj(r.words,P.name.replace(/\.pdf$/i,"")+" p."+p,{thumb:thumbOf(r.cv),ex:r.ex,rot:r.rot,cols:r.cols||null}));clean+=r.sc>0?Math.round(r.sc/3):0;
+   var r=BC?await ocrCols(pc,BC):await ocrScan(pc);got.push(pgObj(r.words,P.name.replace(/\.pdf$/i,"")+" p."+p,Object.assign({thumb:thumbOf(r.cv),ex:r.ex,rot:r.rot,cols:r.cols||null},bigOf(r.cv))));clean+=r.sc>0?Math.round(r.sc/3):0;
    m.textContent=(i+1)+"/"+total+"쪽 완료 (p."+p+(r.rot?", 뒤집힌 쪽을 돌려서 읽음":"")+")"}
  }catch(e){m.textContent=errMsg(e,P.name);P.busy=false;$("pkGo").disabled=false;$("pkStop").hidden=true;if(!got.length)return}
  P.busy=false;$("pkStop").hidden=true;$("pk").hidden=true;PK=null;
@@ -1056,7 +1073,7 @@ function runRV(){if(!RV)return;var strip=$("rvStrip").checked,sub=$("rvSub").che
  RV.pages.forEach(function(pg){var b=parseBest(pg.w,RV.meanOv,strip,pg.cols?null:RV.force,pg.cols||null);if(!b)return;if(pg.cols)ncol++;
   if(b.m==="V"){nv++;if(pct==null)pct=b.r.meanPct}else if(b.m==="T")nt++;else nc++;
   var ex=b.dict?false:(pg.ex!=null?pg.ex:cdExercise(pg.w));
-  b.fin.forEach(function(e){e.pg=pg.label;e.thumb=pg.thumb;e.ex=!!ex;items.push(e)})});
+  b.fin.forEach(function(e){e.pg=pg.label;e.thumb=pg.thumb;e.pgref=pg;e.ex=!!ex;items.push(e)})});
  var good=items.filter(function(e){return!e.sub&&e.ko}).length;RV.generic=false;RV.nv=nv;RV.nc=nc;RV.nt=nt;RV.ncol=ncol;
  if(good<2&&RV.rows.length){items=[];RV.generic=true;RV.rows.forEach(function(r){rowPairs(r).forEach(function(p){items.push({en:p.en,ko:p.ko,sub:false,warn:vWarn(p.en,p.ko,100)})})})}
  items.forEach(function(e){e.on=(e.sub?sub:!!e.ko)&&!e.ex});RV.items=items;
@@ -1068,12 +1085,15 @@ function renderRV(){var m=$("imsg");
  $("rvinfo").textContent=(RV.ncol?"지정한 칸(영어 단어·한글 뜻)만 읽었어요. ":RV.generic?"표 형식으로 읽었어요. ":"쪽마다 알맞은 읽기 방식(표제어·뜻 목록"+(RV.nv?" "+RV.nv+"쪽":"")+" / 그림 카드"+(RV.nc?" "+RV.nc+"쪽":"")+" / 열 표"+(RV.nt?" "+RV.nt+"쪽":"")+")을 골랐어요. ")+"단어 "+n+"개"+(sub?", 파생어 "+sub+"개":"")+(wr?" · 확인이 필요한 줄 "+wr+"개":"")+(ex?" · 문제 쪽으로 보이는 줄 "+ex+"개는 선택을 꺼 뒀어요":"")+(ENG_SRV?" · 내 서버(RapidOCR)로 읽었어요":" · ⚠ 이 기기 안의 기본 OCR로 읽었어요. 정확도가 낮으니 아래 '내 서버로 글자 읽기'를 켜 보세요");
  $("rvSlWrap").hidden=RV.generic||!RV.nv;$("rvSlv").textContent=$("rvSl").value+"%";
  var h='<tr><th></th><th>영어</th><th>뜻 (여러 개면 쉼표로)</th><th></th></tr>';
- RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'});
- $("rvt").innerHTML=h;$("rv").hidden=false}
+ RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'+(CROPON&&e.pgref&&e.pgref.big?'<tr class="crow"><td></td><td colspan="3"><div class="crw" hidden><canvas class="crc" data-p="h" data-i="'+i+'"></canvas></div><div class="crw" hidden><canvas class="crc" data-p="m" data-i="'+i+'"></canvas></div></td></tr>':'')});
+ $("rvt").innerHTML=h;$("rv").hidden=false;if(CROPON)fillCrops()}
 
-function diagFile(){if(!RV)return;var o={ver:18,ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:19,ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
+
+var CROPON=true;try{CROPON=localStorage.getItem("wtm_crop")!=="0"}catch(e){}
+if($("rvCrop")){$("rvCrop").checked=CROPON;$("rvCrop").onchange=function(){CROPON=this.checked;try{localStorage.setItem("wtm_crop",CROPON?"1":"0")}catch(e){}if(RV&&RV.items&&RV.items.length)renderRV()}}
 $("rvMode").onchange=function(){if(!RV)return;RV.force=this.value||null;runRV()};
 $("rvStrip").onchange=runRV;$("rvSub").onchange=runRV;
 $("rvSl").oninput=function(){if(!RV)return;RV.meanOv=this.value/100;runRV()};
@@ -1096,6 +1116,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
-<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v18 · 2026-10-24</div>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v19 · 2026-10-24</div>
 </body>
 </html>
