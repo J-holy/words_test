@@ -395,11 +395,11 @@ function vStripPos(s){s=s.trim();var m=s.match(/^([가-힣])\s+(?=\S)/);if(m){s=
 function vTidy(x){x=x.replace(/\s+[A-Za-z0-9\[\]|@®©&]{1,4}(?=\s|$)/g,"").replace(/^[A-Za-z0-9\[\]|@®©&]{1,3}\s+/,"");
  x=x.replace(/(^|\s)([가-힣])\s(?=[가-힣])/g,"$1$2").replace(/(^|\s)([가-힣])\s(?=[가-힣])/g,"$1$2");return x.trim()}
 function vSegs(s,strip){
- s=vCleanKo(s,strip).replace(/(^|[\s,;가-힣)\]])(?:vt|vi|n|v|a)(?=[가-힣~(\[])/g,"$1 ; ").replace(/(^|[\s가-힣)\]])\d{1,2}[.)](?=[가-힣~(\[])/g,"$1 ; ").replace(/[\u24D0-\u24E9\u24B6-\u24CF]/g," ; ").replace(/(^|\s)[@®©]{1,2}(?=\s|$)/g," ; ").replace(/(^|\s)\d{1,2}[.)]\s+/g," ; ").replace(/([가-힣])\.\s+(?=[가-힣~])/g,"$1, ");
- var seg=splitMeanings(s).map(vTidy).map(function(x){return x.replace(/^[\s\d.;:\-~]+|[\s;:,.\-]+$/g,"").trim()}).filter(function(x){return vHan(x)&&x.length>=1});
+ s=vCleanKo(s,strip).replace(/(^|[\s,;가-힣)\]])(?:vt|vi|en|n|v|a)(?=[가-힣~(\[])/g,"$1 ; ").replace(/(^|[\s가-힣)\]])\d{1,2}[.)](?=[가-힣~(\[])/g,"$1 ; ").replace(/[\u24D0-\u24E9\u24B6-\u24CF]/g," ; ").replace(/(^|\s)[@®©]{1,2}(?=\s|$)/g," ; ").replace(/(^|\s)\d{1,2}[.)]\s+/g," ; ").replace(/([가-힣])\.(?:\s+(?=[가-힣~])|(?=~))/g,"$1, ");
+ var seg=splitMeanings(s).map(vTidy).map(function(x){return x.replace(/^[\s\d.;:\-]+|[\s;:,.\-]+$/g,"").replace(/^~\s+/,"").trim()}).filter(function(x){return vHan(x)&&x.length>=1});
  var seen={};return seg.filter(function(x){if(seen[x])return false;seen[x]=1;return true})}
 function vWarn(en,ko,conf,hc){var w=[];if(hc!=null&&hc<65)w.push("영어 확인");
- if(!/^[A-Za-z][A-Za-z\s'’\-\/.,\[\]()]*[A-Za-z.\])]$/.test(en)&&!/^[A-Za-z]$/.test(en))w.push("영어");
+ if(!/^[A-Za-z][A-Za-z\s'’\-\/.,\[\]()~]*[A-Za-z.\])]$/.test(en)&&!/^[A-Za-z]$/.test(en))w.push("영어");
  if(!ko)w.push("뜻 없음");else{
   if(/[A-Za-z0-9]/.test(ko.replace(/\b[AB]\b/g,"")))w.push("뜻에 영문·숫자");
   if(/[^가-힣\s…~,.\-·A-Za-z]/.test(ko))w.push("이상한 글자·기호");
@@ -419,7 +419,7 @@ function vCore(lines,H,pw,minX,opt){
  lines.forEach(function(l){l.tk=vTokens(l.w,H);l.fl=-1;
   for(var i=0;i<l.tk.length;i++){var t=l.tk[i].t;if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=2&&!/^[A-Z]{3}$/.test(t)&&l.tk[i].c>=60){l.fl=i;break}if(vHan(t)||/^\[/.test(t))break}
   l.num=l.tk.some(function(t,i){return /^\d{3,5}$/.test(t.t)&&(l.fl<0||i<l.fl)});
-  if(l.fl>=0&&l.num&&l.tk[l.fl].t.replace(/[^A-Za-z]/g,"").length<3){l.fl=-1;l.num=false}});
+  if(l.fl>=0&&l.num&&l.tk[l.fl].t.replace(/[^A-Za-z]/g,"").length<3){var gl=0,gi;for(gi=l.fl;gi<l.tk.length&&gi<l.fl+4&&vLat(l.tk[gi].t);gi++)gl+=l.tk[gi].t.replace(/[^A-Za-z]/g,"").length;if(gl<6){l.fl=-1;l.num=false}}});
  var xsN=lines.filter(function(l){return l.fl>=0&&l.num}).map(function(l){return l.tk[l.fl].x0}),
   xsA=lines.filter(function(l){return l.fl>=0}).map(function(l){return l.tk[l.fl].x0}).sort(function(a,b){return a-b});
  if(!xsA.length)return null;
@@ -438,6 +438,7 @@ function vCore(lines,H,pw,minX,opt){
   heads.push(h);prev=h});
  if(heads.length<2)return null;
  var firsts=heads.map(function(h){return h.rest.filter(function(t){return t.x0>h.gx1+0.5*H&&vOk(t)&&/[가-힣A-Za-z(@®©ⓐ-ⓩ]/.test(t.t)})[0]}).filter(Boolean).map(function(t){return t.x0});
+ if(!firsts.length&&heads.length>=6&&xsN.length>=0.6*heads.length){var hl={};heads.forEach(function(h){hl[h.li]=1});firsts=lines.filter(function(L,li){return!hl[li]}).map(function(L){return L.tk.filter(function(t){return t.x0>hx+0.15*pw&&t.x0<hx+0.7*pw&&vOk(t)&&/[가-힣(@®©~]/.test(t.t)})[0]}).filter(Boolean).map(function(t){return t.x0})}
  var meanX=opt.meanX!=null?minX+opt.meanX*pw:(firsts.length?vmed(firsts)-0.025*pw:hx+0.3*pw),rz=meanX-0.04*pw;
  var etym=function(s){return /[+→]|어원/.test(s)},own={},sp=vmed(heads.slice(1).map(function(h,i){return h.line.y-heads[i].line.y}))||4*H;
  heads.forEach(function(h){h.items=[];own[h.li]=1});
@@ -893,12 +894,29 @@ function srvWorker(){return{setParameters:function(){return Promise.resolve()},r
   if(!r.ok){SRV.down=Date.now();return srvTess(c,"서버가 오류를 냈어요.")}
   ENG_SRV=true;
   var j=await r.json();if(!j.cached){var el=Math.round((Date.now()-t0)/1000);SRV.avg=SRV.avg?Math.round(0.6*SRV.avg+0.4*el):el}
-  var ws=j.words||[],byLn={};
+  var ws=srvFix(j.words||[]),byLn={};
   ws.forEach(function(w){(byLn[w.ln]=byLn[w.ln]||[]).push(w)});
   Object.keys(byLn).forEach(function(k){var a=byLn[k].sort(function(p,q){return p.x0-q.x0});for(var i=0;i<a.length-1;i++){var h=a[i].y1-a[i].y0;a[i].x1=Math.max(a[i].x0+0.25*h,a[i].x1-0.5*h)}});
   j.words=ws;var rows=["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"];
   (j.words||[]).forEach(function(w,i){rows.push(["5",1,w.ln,1,1,i+1,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1-w.x0),Math.round(w.y1-w.y0),w.c,w.t].join("\t"))});
   return{data:{tsv:rows.join("\n"),text:(j.words||[]).map(function(w){return w.t}).join(" ")}}}}}
+/*FIX-START*/
+function srvFix(ws){var by={},info={},hs=[],out=[];
+ ws.forEach(function(w){(by[w.ln]=by[w.ln]||[]).push(w)});
+ Object.keys(by).forEach(function(k){var a=by[k],x0=Math.min.apply(0,a.map(function(w){return w.x0})),x1=Math.max.apply(0,a.map(function(w){return w.x1})),y0=Math.min.apply(0,a.map(function(w){return w.y0})),y1=Math.max.apply(0,a.map(function(w){return w.y1}));info[k]={w:x1-x0,h:y1-y0};hs.push(y1-y0)});
+ hs.sort(function(p,q){return p-q});var med=hs.length?hs[Math.floor(hs.length/2)]:0;
+ function cp(w,o){var r={};for(var k in w)r[k]=w[k];for(k in o)r[k]=o[k];return r}
+ function split(w,parts){var tot=0,i,cur=w.x0;parts.forEach(function(p){tot+=p.length});parts.forEach(function(p){var wd=(w.x1-w.x0)*p.length/tot;out.push(cp(w,{t:p,x0:cur,x1:cur+wd}));cur+=wd})}
+ ws.forEach(function(w){var q=info[w.ln];
+  if(med>0&&q&&(q.h>2.5*med||(q.h>1.5*q.w&&q.h>2*med)))return;/* 손글씨·낙서 때문에 키가 너무 큰 줄은 버려요 */
+  var t=String(w.t),m;
+  if((m=/^(\d{2,3})[oO]$/.exec(t))){out.push(cp(w,{t:m[1]+"0"}));return}
+  if((m=/^(\d{3,5})([A-Za-z][A-Za-z'’\-]*)$/.exec(t)))return split(w,[m[1],m[2]]);
+  if((m=/^([A-Za-z]+)~([A-Za-z]*)$/.exec(t)))return split(w,m[2]?[m[1],"~",m[2]]:[m[1],"~"]);
+  
+  out.push(w)});
+ return out}
+/*FIX-END*/
 function srvStatus(){var s=$("srvSt");if(s)s.textContent=SRV.on()?"· 사용 중":(SRV.url?"· 꺼짐":"· 설정 안 함")}
 (function(){var u=$("srvUrl"),t=$("srvTok"),c=$("srvUse");u.value=SRV.url;t.value=SRV.tok;c.checked=SRV.use;srvStatus();
  function sv(){SRV.url=u.value.trim();SRV.tok=t.value;SRV.use=c.checked;srvSave();srvStatus()}
@@ -1037,7 +1055,7 @@ async function ocrScan(cv,psms){var w=await getOcr(),best=null;psms=psms||[3,11]
   return o}
  best=await passes(cv,0);
  if(best.q<8){var c2=rot180(cv),o3=await passes(c2,180);if(o3.q>=best.q+6||o3.sc>best.sc)best=o3}
- var b0=parseBest(best.words,null,true);if(b0)best.words=await rescueMeans(w,best.words,best.cv);
+ var b0=ENG_SRV?null:parseBest(best.words,null,true);if(b0)best.words=await rescueMeans(w,best.words,best.cv);/* 서버로 읽었으면 조각 다시 읽기는 하지 않아요 (사진 한 장에 서버 요청이 여러 번 나가면 사용량 한도가 금방 차요) */
  return best}
 async function importOne2(f){var name=f.name.toLowerCase();ENG_SRV=SRV.on();
  if(/\.(png|jpe?g|webp|bmp|gif|heic|heif)$/.test(name)){var cv=prepCanvas(await loadBitmap(f));ocrLabel=f.name;
@@ -1129,10 +1147,10 @@ function renderRV(){var m=$("imsg");
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'+(CROPON&&e.pgref&&e.pgref.big?'<tr class="crow"><td></td><td colspan="3"><div class="crw" hidden><canvas class="crc" data-p="h" data-i="'+i+'"></canvas></div><div class="crw" hidden><canvas class="crc" data-p="m" data-i="'+i+'"></canvas></div></td></tr>':'')});
  $("rvt").innerHTML=h;$("rv").hidden=false;if(CROPON)fillCrops()}
 
-function diagFile(){if(!RV)return;var o={ver:23,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:24,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
-function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver23 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
+function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver24 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
  ord.forEach(function(k){var a=by[k].slice().sort(function(p,q){return p.x0-q.x0}),x0=Math.round(a[0].x0),x1=Math.round(Math.max.apply(0,a.map(function(w){return w.x1}))),y0=Math.round(Math.min.apply(0,a.map(function(w){return w.y0}))),y1=Math.round(Math.max.apply(0,a.map(function(w){return w.y1}))),c=Math.round(a.reduce(function(s,w){return s+(w.c==null?100:w.c)},0)/a.length);
   out.push(x0+","+y0+","+x1+","+y1+","+c+"|"+a.map(function(w){return w.t}).join(" "))})});return out.join("\n")}
 if($("rvCopy"))$("rvCopy").onclick=function(){var s=rawText(),o=$("rvCopyOut");if(!s)return;o.hidden=false;o.value=s;o.focus();o.select();try{navigator.clipboard.writeText(s).then(function(){$("imsg").textContent="서버가 읽은 글자를 복사했어요. 채팅창에 붙여 넣어 주세요."},function(){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."})}catch(e){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."}};
@@ -1162,6 +1180,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
-<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v23 · 2026-10-25</div>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v24 · 2026-10-25</div>
 </body>
 </html>
