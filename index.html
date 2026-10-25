@@ -415,6 +415,9 @@ function vLines(W,mode,H,pw,minX){var lines=[];
  lines.sort(function(a,b){return a.y-b.y});return lines}
 function vOk(t){return t.c>=(vHan(t.t)?50:60)}
 function vOkL(t){return t.c>=(vHan(t.t)?20:60)}
+function vBleed(W,pw0){if(!W.every(function(w){return w.ln!=null}))return W;var by={};W.forEach(function(w){var b=by[w.ln];if(!b)b=by[w.ln]={a:1e9,z:-1e9,c:0,n:0};b.a=Math.min(b.a,w.x0);b.z=Math.max(b.z,w.x1);b.c+=(w.c==null?100:w.c);b.n++});
+ var R=-1e9,nw=0;Object.keys(by).forEach(function(k){var b=by[k];if(b.z-b.a>=0.12*pw0&&b.c/b.n>=30){nw++;R=Math.max(R,b.z)}});if(nw<5)return W;
+ var lim=R+0.01*pw0,out=W.filter(function(w){return w.x0<=lim});return out.length>=8&&out.length>=0.85*W.length?out:W}
 function vCore(lines,H,pw,minX,opt){
  lines.forEach(function(l){l.tk=vTokens(l.w,H);l.fl=-1;
   for(var i=0;i<l.tk.length;i++){var t=l.tk[i].t;if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=2&&!/^[A-Z]{3}$/.test(t)&&l.tk[i].c>=60){l.fl=i;break}if(vHan(t)||/^\[/.test(t))break}
@@ -425,15 +428,22 @@ function vCore(lines,H,pw,minX,opt){
  if(!xsA.length)return null;
  var hx=xsN.length>=3?vmed(xsN):xsA[Math.floor(xsA.length*0.2)],tolX=0.06*pw,heads=[],prev=null;
  var cy=[];lines.forEach(function(l){if(l.fl>=0&&Math.abs(l.tk[l.fl].x0-hx)<=tolX)cy.push(l.y)});var dd=[];for(var q=1;q<cy.length;q++)dd.push(cy[q]-cy[q-1]);var sp0=vmed(dd),wrapMax=sp0>0?Math.min(1.9*H,0.65*sp0):1.9*H;
+ var nkept=[];lines.forEach(function(l){l.tk.forEach(function(t){if(/^\d{3,5}$/.test(t.t)&&t.c>=60)nkept.push({x0:t.x0,x1:t.x1,y:l.y})})});
+ if(nkept.length>=3){var nx0=vmed(nkept.map(function(n){return n.x0}));nkept=nkept.filter(function(n){return Math.abs(n.x0-nx0)<=0.05*pw})}
+ var cands=lines.filter(function(l){return l.fl>=0&&Math.abs(l.tk[l.fl].x0-hx)<=tolX});
+ function nnear(l,n){var d=l.y-n.y;return d>=-0.6*H&&d<=1.2*H&&n.x0<=l.tk[l.fl].x1}
+ var nmatch=nkept.filter(function(n){return cands.some(function(l){return nnear(l,n)})}).length,numLay=nkept.length>=3&&nmatch>=0.75*nkept.length;
+ function nn(l){return l.num||(numLay&&nkept.some(function(n){return nnear(l,n)}))}
  lines.forEach(function(l,li){
   if(l.fl<0||Math.abs(l.tk[l.fl].x0-hx)>tolX)return;
   var tk=l.tk,gs=l.fl,ge=gs;
   while(ge+1<tk.length&&vEnTok(tk[ge+1])&&tk[ge+1].x0-tk[ge].x1<2.4*H)ge++;
   if(ge>gs&&tk[ge].t==="a")ge--;var grp=tk.slice(gs,ge+1);
-  if(!l.num&&prev&&(l.y-prev.line.y)<wrapMax){
+  if(!nn(l)&&prev&&(l.y-prev.line.y)<wrapMax){
    var okc=grp.length&&grp.every(function(t){return t.c>=60&&vLat(t.t)||/^(A|B|do|to|of|oneself|one's|sb|sth)$/i.test(t.t)})&&ge===tk.length-1||(grp.length&&grp.every(function(t){return t.c>=60})&&tk.slice(ge+1).every(function(t){return t.x0>=hx+0.25*pw}));
    if(okc&&!/^\[/.test(tk[gs].t)){prev.en+=" "+vJoin(grp.map(function(t){return t.t}));prev.gx1=Math.max(prev.gx1,grp[grp.length-1].x1)}
    return}
+  if(numLay&&!nn(l))return;
   var h={en:vJoin(grp.map(function(t){return t.t})),line:l,li:li,gx1:grp[grp.length-1].x1,rest:tk.slice(ge+1),conf:vavg(grp.map(function(t){return t.c})),hc:Math.min.apply(0,grp.map(function(t){return t.c}))};
   heads.push(h);prev=h});
  if(heads.length<2)return null;
@@ -456,7 +466,7 @@ function vCore(lines,H,pw,minX,opt){
    if(it.own){if(phase===0){meaning.push(txt);r.forEach(function(t){conf.push(t.c)})}return}
    var mi=vFirstMean(r);if(mi<0)return;var first=r[mi].t;
    if(vHan(first)&&phase===0&&!(/[가-힣]다\.?$/.test(txt)&&r.length>=6)){meaning.push(vJoin(r.slice(mi).map(function(t){return t.t})));r.forEach(function(t){conf.push(t.c)});return}
-   if(vLat(first)&&first.replace(/[^A-Za-z]/g,"").length>=3){phase=1;
+   if(vLat(first)&&first.replace(/[^A-Za-z]/g,"").length>=3){phase=1;if(r[mi].x0>meanX+0.12*pw)return;
     var k=mi,en=[];while(k<r.length&&vEnTok(r[k],35)){en.push(r[k].t);k++}
     var kr=vStripPos(vJoin(r.slice(k).map(function(t){return t.t})));
     if(en.length&&vHan(kr))derived.push({en:vJoin(en).replace(/[….]+$/,""),raw:kr,conf:vavg(r.map(function(t){return t.c})),hc:vavg(en.map(function(_,i){return r[mi+i].c}))})}
@@ -474,6 +484,7 @@ function parseVoca(W,opt){opt=opt||{};
  W=W.filter(function(w){return w.t&&(w.c==null||w.c>=30||(vHan(w.t)&&w.c>=20))});if(W.length<8)return null;
  var minX=Math.min.apply(0,W.map(function(w){return w.x0})),maxX=Math.max.apply(0,W.map(function(w){return w.x1})),pw=Math.max(1,maxX-minX);
  var H=vmed(W.map(function(w){return w.y1-w.y0}))||20;W.forEach(function(w){w.y=(w.y0+w.y1)/2});
+ W=vBleed(W,pw);
  var modes=W.filter(function(w){return w.ln!=null}).length>W.length*0.9?["ln","cl"]:["cl"],best=null;
  var combos=[];modes.forEach(function(m){["near","seq"].forEach(function(a){combos.push([m,a])})});
  combos.forEach(function(cb){var m=cb[0],r=null;try{r=vCore(vLines(W,m,H,pw,minX),H,pw,minX,{meanX:opt.meanX,assign:cb[1]})}catch(e){}if(!r)return;
@@ -1147,10 +1158,10 @@ function renderRV(){var m=$("imsg");
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'+(CROPON&&e.pgref&&e.pgref.big?'<tr class="crow"><td></td><td colspan="3"><div class="crw" hidden><canvas class="crc" data-p="h" data-i="'+i+'"></canvas></div><div class="crw" hidden><canvas class="crc" data-p="m" data-i="'+i+'"></canvas></div></td></tr>':'')});
  $("rvt").innerHTML=h;$("rv").hidden=false;if(CROPON)fillCrops()}
 
-function diagFile(){if(!RV)return;var o={ver:24,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:25,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
-function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver24 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
+function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver25 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
  ord.forEach(function(k){var a=by[k].slice().sort(function(p,q){return p.x0-q.x0}),x0=Math.round(a[0].x0),x1=Math.round(Math.max.apply(0,a.map(function(w){return w.x1}))),y0=Math.round(Math.min.apply(0,a.map(function(w){return w.y0}))),y1=Math.round(Math.max.apply(0,a.map(function(w){return w.y1}))),c=Math.round(a.reduce(function(s,w){return s+(w.c==null?100:w.c)},0)/a.length);
   out.push(x0+","+y0+","+x1+","+y1+","+c+"|"+a.map(function(w){return w.t}).join(" "))})});return out.join("\n")}
 if($("rvCopy"))$("rvCopy").onclick=function(){var s=rawText(),o=$("rvCopyOut");if(!s)return;o.hidden=false;o.value=s;o.focus();o.select();try{navigator.clipboard.writeText(s).then(function(){$("imsg").textContent="서버가 읽은 글자를 복사했어요. 채팅창에 붙여 넣어 주세요."},function(){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."})}catch(e){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."}};
@@ -1180,6 +1191,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
-<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v24 · 2026-10-25</div>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v25 · 2026-10-25</div>
 </body>
 </html>
