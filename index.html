@@ -417,7 +417,7 @@ function vOk(t){return t.c>=(vHan(t.t)?50:60)}
 function vOkL(t){return t.c>=(vHan(t.t)?20:60)}
 function vBleed(W,pw0){if(!W.every(function(w){return w.ln!=null}))return W;var by={};W.forEach(function(w){var b=by[w.ln];if(!b)b=by[w.ln]={a:1e9,z:-1e9,c:0,n:0};b.a=Math.min(b.a,w.x0);b.z=Math.max(b.z,w.x1);b.c+=(w.c==null?100:w.c);b.n++});
  var R=-1e9,nw=0;Object.keys(by).forEach(function(k){var b=by[k];if(b.z-b.a>=0.12*pw0&&b.c/b.n>=30){nw++;R=Math.max(R,b.z)}});if(nw<5)return W;
- var lim=R+0.01*pw0,out=W.filter(function(w){return w.x0<=lim});return out.length>=8&&out.length>=0.85*W.length?out:W}
+ var lim=R+0.01*pw0,out=W.filter(function(w){return w.x0<=lim});return out.length>=8&&out.length>=0.75*W.length?out:W}
 function vCore(lines,H,pw,minX,opt){
  lines.forEach(function(l){l.tk=vTokens(l.w,H);l.fl=-1;
   for(var i=0;i<l.tk.length;i++){var t=l.tk[i].t;if(vLat(t)&&t.replace(/[^A-Za-z]/g,"").length>=2&&!/^[A-Z]{3}$/.test(t)&&l.tk[i].c>=60){l.fl=i;break}if(vHan(t)||/^\[/.test(t))break}
@@ -452,6 +452,7 @@ function vCore(lines,H,pw,minX,opt){
  var meanX=opt.meanX!=null?minX+opt.meanX*pw:(firsts.length?vmed(firsts)-0.025*pw:hx+0.3*pw),rz=meanX-0.04*pw;
  var etym=function(s){return /[+→]|어원/.test(s)},own={},sp=vmed(heads.slice(1).map(function(h,i){return h.line.y-heads[i].line.y}))||4*H;
  heads.forEach(function(h){h.items=[];own[h.li]=1});
+ if(opt.assign==="seq"){var up=0,tot=0;lines.forEach(function(L){if(own[lines.indexOf(L)])return;if(!L.tk.some(function(t){return t.x0>=rz&&vOkL(t)}))return;var bd=1e9,bh=null;heads.forEach(function(h){var d=Math.abs(L.y-h.line.y);if(d<bd){bd=d;bh=h}});if(bh&&bd<=Math.max(1.2*sp,3*H)){tot++;if(L.y<bh.line.y-0.5*H)up++}});if(up>=2&&up>=0.25*tot)return null}
  lines.forEach(function(L,li){if(own[li])return;var r=L.tk.filter(function(t){return t.x0>=rz&&vOkL(t)});if(!r.length)return;
   var best=-1,bd=1e9;
   if(opt.assign==="seq"){heads.forEach(function(h,i){if(h.line.y<=L.y)best=i});bd=0}
@@ -1158,10 +1159,10 @@ function renderRV(){var m=$("imsg");
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'+(CROPON&&e.pgref&&e.pgref.big?'<tr class="crow"><td></td><td colspan="3"><div class="crw" hidden><canvas class="crc" data-p="h" data-i="'+i+'"></canvas></div><div class="crw" hidden><canvas class="crc" data-p="m" data-i="'+i+'"></canvas></div></td></tr>':'')});
  $("rvt").innerHTML=h;$("rv").hidden=false;if(CROPON)fillCrops()}
 
-function diagFile(){if(!RV)return;var o={ver:25,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:26,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
-function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver25 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
+function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver26 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
  ord.forEach(function(k){var a=by[k].slice().sort(function(p,q){return p.x0-q.x0}),x0=Math.round(a[0].x0),x1=Math.round(Math.max.apply(0,a.map(function(w){return w.x1}))),y0=Math.round(Math.min.apply(0,a.map(function(w){return w.y0}))),y1=Math.round(Math.max.apply(0,a.map(function(w){return w.y1}))),c=Math.round(a.reduce(function(s,w){return s+(w.c==null?100:w.c)},0)/a.length);
   out.push(x0+","+y0+","+x1+","+y1+","+c+"|"+a.map(function(w){return w.t}).join(" "))})});return out.join("\n")}
 if($("rvCopy"))$("rvCopy").onclick=function(){var s=rawText(),o=$("rvCopyOut");if(!s)return;o.hidden=false;o.value=s;o.focus();o.select();try{navigator.clipboard.writeText(s).then(function(){$("imsg").textContent="서버가 읽은 글자를 복사했어요. 채팅창에 붙여 넣어 주세요."},function(){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."})}catch(e){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."}};
@@ -1191,6 +1192,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
-<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v25 · 2026-10-25</div>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v26 · 2026-10-26</div>
 </body>
 </html>
