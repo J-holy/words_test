@@ -632,8 +632,37 @@ function vPosCol(W){var P=/^(명사|동사|형용사|부사|전치사|접속사|
   H=vmed(W.map(function(w){return w.y1-w.y0}))||20,tol=0.6*H,near=ps.filter(function(w){return Math.abs(w.x0-mx)<=tol});
  if(near.length<4||near.length<0.7*ps.length)return W;
  return W.filter(function(w){return Math.abs(w.x0-mx)>tol||!(w.x1-w.x0<6*H)})}
+function parsePronCards(W){
+ W=W.filter(function(w){return w.t&&(w.c==null||w.c>=30)&&w.ln!=null});if(W.length<12)return null;
+ var minX=Math.min.apply(0,W.map(function(w){return w.x0})),maxX=Math.max.apply(0,W.map(function(w){return w.x1})),pw=Math.max(1,maxX-minX),by={};
+ W.forEach(function(w){(by[w.ln]=by[w.ln]||[]).push(w)});
+ var heads=[];
+ Object.keys(by).forEach(function(k){var a=by[k].sort(function(p,q){return p.x0-q.x0}),bi=-1;
+  for(var i=0;i<a.length;i++){if(/^\[/.test(a[i].t)){bi=i;break}if(!/^[A-Za-z][A-Za-z'’\-]*$/.test(a[i].t))return}
+  if(bi<1||bi>3)return;var ws=a.slice(0,bi),en=ws.map(function(w){return w.t}).join(" ");
+  if(en.replace(/[^A-Za-z]/g,"").length<2||ws.some(function(w){return(w.c==null?100:w.c)<60}))return;
+  if(bi===1&&CD_STOP[en.toLowerCase()])return;
+  heads.push({en:en,x0:a[0].x0,x1:Math.max.apply(0,a.map(function(w){return w.x1})),y0:Math.min.apply(0,a.map(function(w){return w.y0})),y1:Math.max.apply(0,a.map(function(w){return w.y1})),ln:+k,c:vavg(ws.map(function(w){return w.c==null?100:w.c})),hc:Math.min.apply(0,ws.map(function(w){return w.c==null?100:w.c}))})});
+ if(heads.length<4)return null;
+ var xs=heads.map(function(h){return h.x0}).sort(function(a,b){return a-b}),mx=xs[Math.floor(xs.length/2)];
+ heads=heads.filter(function(h){return Math.abs(h.x0-mx)<=0.06*pw});if(heads.length<4)return null;
+ heads.sort(function(a,b){return a.y0-b.y0});
+ var rightB=maxX-0.07*pw,rows=[];
+ heads.forEach(function(h,i){var hh=h.y1-h.y0,lim=Math.min(i+1<heads.length?heads[i+1].y0:1e9,h.y1+4.5*hh),cand=[];
+  W.forEach(function(w){if(w.ln===h.ln)return;var cy=(w.y0+w.y1)/2;if(cy<=(h.y0+h.y1)/2+0.4*hh||cy>=lim||w.x0<mx-0.03*pw||w.x0>rightB)return;cand.push({t:w.t,x0:w.x0,cy:cy,hh:w.y1-w.y0,c:w.c==null?100:w.c})});
+  cand.sort(function(a,b){return a.cy-b.cy});var rs=[];
+  cand.forEach(function(o){var r=rs[rs.length-1];if(r&&Math.abs(o.cy-r.cy)<0.5*Math.max(o.hh,r.hh)){r.a.push(o)}else rs.push({cy:o.cy,hh:o.hh,a:[o]})});
+  rs.forEach(function(r){r.a.sort(function(p,q){return p.x0-q.x0});r.t=r.a.map(function(o){return o.t}).join(" ")});
+  h.rows=rs});
+ var ICON=/^[통명형부동전접조대감]\s?(?=[가-힣~(])/,isMean=function(r){return/^[통명형부동전접조대감]?\s?[가-힣~]/.test(r.t)&&!/^(교육부|\[|\d)/.test(r.t)&&r.a.every(function(o){return o.c>=40})};
+ var first=heads.map(function(h){return h.rows.filter(isMean)[0]||null}),nIcon=first.filter(function(r){return r&&ICON.test(r.t)}).length,icons=nIcon>=Math.max(3,0.6*heads.filter(function(h,i){return first[i]}).length);
+ var ents=heads.map(function(h,i){var r=first[i],raw=r?r.t:"";
+  if(icons&&raw){raw=raw.replace(ICON,"").replace(/([가-힣,])\s?[명통형부동]\s+(?=[가-힣])/g,"$1 ; ")}
+  return{en:h.en,raw:raw,conf:r?(h.c+vavg(r.a.map(function(o){return o.c})))/2:h.c,hc:h.hc,sub:false,y:h.y0,x:h.x0,h:h.y1-h.y0,bx:[h.x0,h.y0,h.x1,h.y1]}});
+ return{entries:ents,meanPct:0.6,mode:"pron"}}
 function parseBest(w,meanOv,strip,force,cols){var c=[];if(!cols)w=vPosCol(w);
  if(!force){try{var tg=parseTagCards(cp());if(tg){var ftg=cdSane(vaFinish(tg,strip)),cl=ftg.filter(function(e){return e.ko&&!e.warn.length}).length;if(ftg.length>=4&&cl>=0.6*ftg.length)return{m:"G",r:tg,fin:ftg,sc:scoreFin(ftg)+4000}}}catch(e){}}
+ if(!force){try{var pc=parsePronCards(cp());if(pc){var fpc=cdSane(vaFinish(pc,strip)),clp=fpc.filter(function(e){return e.ko&&!e.warn.length}).length;if(fpc.length>=4&&clp>=0.5*fpc.length)return{m:"P",r:pc,fin:fpc,sc:scoreFin(fpc)+4000}}}catch(e){}}
  var vNum=false;if(!force){try{var vp0=parseVoca(cp(),{meanX:meanOv});vNum=!!(vp0&&vp0.numLay&&vp0.entries.length>=6)}catch(e){}}
  if(!force&&!vNum){try{var dm=parseDict(w.map(function(x){return{t:x.t,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1,c:x.c,ln:x.ln}}),{cols:cols||null});
   if(dm&&dm.entries.length>=3){var fd=vaFinish(dm,strip);fd.forEach(function(f,i){var e=dm.entries[i];if(e){f.crop=e.crop;f.cb=e.cb}});var gd=fd.filter(function(e){return e.ko&&e.ko.replace(/[^가-힣]/g,"").length>=2}).length;
@@ -1207,10 +1236,10 @@ function renderRV(){var m=$("imsg");
  RV.items.forEach(function(e,i){h+='<tr class="'+(e.warn.length?"wr":"")+'"><td><input type="checkbox" class="rvc" data-i="'+i+'"'+(e.on?" checked":"")+'></td><td><input type="text" data-i="'+i+'" data-k="en" value="'+esc(e.en)+'"></td><td><input type="text" data-i="'+i+'" data-k="ko" value="'+esc(e.ko)+'"></td><td>'+(e.sub?'<span class="tag">파생어</span> ':'')+(e.ex?'<span class="tag">문제 쪽</span> ':'')+(e.warn.length?'<span class="tag">⚠ '+esc(e.warn.join(", "))+'</span> ':'')+(e.pg?'<button type="button" class="pgl" data-i="'+i+'">'+esc(String(e.pg).replace(/^.*\s(p\.\d+)$/,"$1"))+'</button>':'')+'</td></tr>'+(CROPON&&e.pgref&&e.pgref.big?'<tr class="crow"><td></td><td colspan="3"><div class="crw" hidden><canvas class="crc" data-p="h" data-i="'+i+'"></canvas></div><div class="crw" hidden><canvas class="crc" data-p="m" data-i="'+i+'"></canvas></div></td></tr>':'')});
  $("rvt").innerHTML=h;$("rv").hidden=false;if(CROPON)fillCrops()}
 
-function diagFile(){if(!RV)return;var o={ver:30,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
+function diagFile(){if(!RV)return;var o={ver:31,miss:RV.miss||[],ua:navigator.userAgent,srv:!!(window.SRV&&SRV.on()),pages:RV.pages.map(function(pg){return{label:pg.label,cols:pg.cols||null,words:(pg.w||[]).map(function(w){return[w.t,Math.round(w.x0),Math.round(w.y0),Math.round(w.x1),Math.round(w.y1),Math.round(w.c==null?100:w.c),w.ln||0]})}}),items:(RV.items||[]).map(function(e){return[e.en,e.ko,e.sub?1:0]})};
  var b=new Blob([JSON.stringify(o)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="word-test-diag.json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 if($("rvDiag"))$("rvDiag").onclick=diagFile;
-function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver30 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
+function rawText(){if(!RV)return"";var out=[];RV.pages.forEach(function(pg){out.push("# "+(pg.label||"")+" ver31 srv:"+(window.SRV&&SRV.on()?1:0));var by={},ord=[];(pg.w||[]).forEach(function(w){var k=w.ln||0;if(!by[k]){by[k]=[];ord.push(k)}by[k].push(w)});
  ord.forEach(function(k){var a=by[k].slice().sort(function(p,q){return p.x0-q.x0}),x0=Math.round(a[0].x0),x1=Math.round(Math.max.apply(0,a.map(function(w){return w.x1}))),y0=Math.round(Math.min.apply(0,a.map(function(w){return w.y0}))),y1=Math.round(Math.max.apply(0,a.map(function(w){return w.y1}))),c=Math.round(a.reduce(function(s,w){return s+(w.c==null?100:w.c)},0)/a.length);
   out.push(x0+","+y0+","+x1+","+y1+","+c+"|"+a.map(function(w){return w.t}).join(" "))})});return out.join("\n")}
 if($("rvCopy"))$("rvCopy").onclick=function(){var s=rawText(),o=$("rvCopyOut");if(!s)return;o.hidden=false;o.value=s;o.focus();o.select();try{navigator.clipboard.writeText(s).then(function(){$("imsg").textContent="서버가 읽은 글자를 복사했어요. 채팅창에 붙여 넣어 주세요."},function(){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."})}catch(e){$("imsg").textContent="아래 글자 상자를 길게 눌러 전체 복사해서 채팅창에 붙여 넣어 주세요."}};
@@ -1240,6 +1269,6 @@ try{var w=localStorage.getItem("wt-words");if(w){$("words").value=w}var tt=local
 initStudent();
 parse();
 </script>
-<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v30 · 2026-10-26</div>
+<div class="mute" style="text-align:center;margin:18px 0 28px;font-size:12px" id="verTag">버전 v31 · 2026-10-26</div>
 </body>
 </html>
